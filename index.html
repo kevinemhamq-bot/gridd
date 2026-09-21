@@ -270,6 +270,18 @@ try{
   .swatch-btn.selected{ border-color:var(--text); }
   .modal-actions{ display:flex; justify-content:space-between; align-items:center; margin-top:12px; }
   .modal-actions .right{ display:flex; gap:8px; }
+
+  /* Drive landing page */
+  .drive-landing{ width:380px; text-align:center; padding:30px 26px 24px; }
+  .drive-landing .dl-icon{ width:52px; height:52px; margin:0 auto 16px; display:flex; align-items:center; justify-content:center; border-radius:50%; background:var(--accent-tint); color:var(--accent-fg); }
+  .drive-landing h3{ margin:0 0 8px; font-size:19px; }
+  .drive-landing p{ margin:0 0 22px; font-size:13.5px; color:var(--muted); line-height:1.55; }
+  .drive-landing .dl-connect{ width:100%; padding:11px 16px; border-radius:22px; border:none; background:var(--blue); color:#fff; font-size:14px; font-weight:600; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:9px; }
+  .drive-landing .dl-connect:hover{ background:var(--accent-hover); }
+  .drive-landing .dl-connect svg{ flex:none; }
+  .drive-landing .dl-skip{ display:block; margin:14px auto 0; background:none; border:none; color:var(--muted); font-size:13px; cursor:pointer; text-decoration:underline; }
+  .drive-landing .dl-skip:hover{ color:var(--text); }
+  .drive-landing .dl-status{ margin-top:14px; font-size:12.5px; color:var(--muted); min-height:16px; }
   .link-danger{ color:var(--expense-fg); background:none; border:none; font-size:13.5px; cursor:pointer; font-weight:500; padding:8px; }
   .link-danger:hover{ text-decoration:underline; }
   /* Recap right sidebar */
@@ -431,6 +443,22 @@ try{
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 </head>
 <body>
+
+  <div class="overlay" id="driveLandingOverlay">
+    <div class="modal drive-landing">
+      <div class="dl-icon">
+        <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 16.58A5 5 0 0 0 18 7h-1.26A8 8 0 1 0 4 15.25"/><polyline points="12 12 12 21"/><polyline points="15 18 12 21 9 18"/></svg>
+      </div>
+      <h3 id="dlTitle">Sync with Google Drive</h3>
+      <p id="dlDesc">Sign in to keep your planner backed up and synced across devices.</p>
+      <button class="dl-connect" id="dlConnectBtn">
+        <svg width="17" height="17" viewBox="0 0 24 24"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg>
+        <span id="dlConnectLabel" data-i18n="drive.landing.signin">Sign in with Google</span>
+      </button>
+      <button class="dl-skip" id="dlSkipBtn" data-i18n="drive.landing.skip">Continue without Drive</button>
+      <div class="dl-status" id="dlStatus"></div>
+    </div>
+  </div>
 
   <div class="sidebar">
     <div class="brand"><div class="dot"></div> GRIDD</div>
@@ -637,6 +665,13 @@ try{
       </section>
 
       <section class="s-section">
+        <h4 data-i18n="set.drive">Google Drive</h4>
+        <p class="s-note" data-i18n="set.driveHint">Sign in to back up and sync your planner across devices.</p>
+        <button class="btn" id="sDriveLoginBtn" data-i18n="set.driveLogin">Sign in to Google Drive</button>
+        <p class="s-note" id="sDriveStatus"></p>
+      </section>
+
+      <section class="s-section">
         <h4 data-i18n="set.sample">Sample data</h4>
         <p class="s-note" data-i18n="set.sampleHint">Deletes ALL your current cards and plans (every year) and replaces them with examples that show every feature. Your settings are kept.</p>
         <button class="btn" id="sSampleBtn" data-i18n="set.sampleAdd">Delete all &amp; load samples</button>
@@ -704,13 +739,14 @@ try{
       "month.addTitle":"Click to add an event this month",
       "banner.one":"{n} event overlaps and doesn't fit in the same row. Cards outlined in red — drag them to another slot or month to fix.",
       "banner.many":"{n} events overlap and don't fit in the same row. Cards outlined in red — drag them to another slot or month to fix.",
-      "set.title":"Settings","done":"Done","ev.markDone":"Mark as done","ev.markUndone":"Mark as not done","set.completed":"Completed cards","set.show":"Show","set.hide":"Hide","set.sample":"Sample data","set.sampleHint":"Deletes ALL your current cards and plans (every year) and replaces them with examples that show every feature. Your settings are kept.","set.sampleAdd":"Delete all & load samples","set.sampleConfirm":"Click again to delete everything","set.money":"Currency and number format","set.currency":"Currency","set.numFormat":"Number format",
+      "set.title":"Settings","done":"Done","ev.markDone":"Mark as done","ev.markUndone":"Mark as not done","set.completed":"Completed cards","set.show":"Show","set.hide":"Hide","set.sample":"Sample data","set.drive":"Google Drive","set.driveHint":"Sign in to back up and sync your planner across devices.","set.driveLogin":"Sign in to Google Drive","set.sampleHint":"Deletes ALL your current cards and plans (every year) and replaces them with examples that show every feature. Your settings are kept.","set.sampleAdd":"Delete all & load samples","set.sampleConfirm":"Click again to delete everything","set.money":"Currency and number format","set.currency":"Currency","set.numFormat":"Number format",
       "set.decimals":"Decimals","dec.0":"Whole numbers","dec.2":"2 places","set.preview":"Preview","cur.none":"No symbol",
       "set.language":"Language","set.appearance":"Appearance","set.theme":"Theme","theme.light":"Light","theme.dark":"Dark","theme.system":"System",
       "set.accent":"Accent color","set.accentMain":"Main","set.accentMoney":"Money","set.density":"Density",
       "density.comfortable":"Comfortable","density.compact":"Compact","set.reset":"Reset to defaults","set.done":"Done",
       "ac.blue":"Blue","ac.indigo":"Indigo","ac.purple":"Purple","ac.rose":"Rose","ac.orange":"Orange","ac.teal":"Teal","ac.green":"Green","ac.graphite":"Graphite",
-      "drive.connect":"Connect Google Drive","drive.connecting":"Connecting…","drive.saving":"Saving…","drive.synced":"Synced to Drive","drive.error":"Sync error — click to retry","drive.reconnect":"Reconnect Drive","drive.setup":"Drive sync not set up"
+      "drive.connect":"Connect Google Drive","drive.connecting":"Connecting…","drive.saving":"Saving…","drive.synced":"Synced to Drive","drive.error":"Sync error — click to retry","drive.reconnect":"Reconnect Drive","drive.setup":"Drive sync not set up",
+      "drive.landing.title":"Sync with Google Drive","drive.landing.desc":"Sign in to keep your planner backed up and synced across devices.","drive.landing.expiredTitle":"Your session expired","drive.landing.expiredDesc":"Sign in again to keep syncing with Google Drive.","drive.landing.connecting":"Opening Google sign-in…","drive.landing.failed":"Sign-in failed or was cancelled. Try again, or continue without Drive.","drive.landing.signin":"Sign in with Google","drive.landing.skip":"Continue without Drive"
     },
     id:{
       "plans":"Rencana","day.back":"‹ Tahun","day.addTitle":"Klik untuk menambah acara di tanggal ini","day.notes":"Catatan bulanan","day.notesPh":"Tulis catatan untuk bulan ini...","day.count":"Rencana bulan","event.startDay":"Tanggal mulai (opsional)","event.endDay":"Tanggal selesai (opsional)","plan.placeholder":"Tambah rencana baru...","plan.add":"Tambah rencana","hint":"Seret rencana ke kalender untuk menambah acara baru.",
@@ -734,13 +770,14 @@ try{
       "month.addTitle":"Klik untuk menambah acara di bulan ini",
       "banner.one":"{n} acara bertumpuk dan tidak muat di baris yang sama. Kartu diberi garis merah — seret ke slot atau bulan lain untuk memperbaikinya.",
       "banner.many":"{n} acara bertumpuk dan tidak muat di baris yang sama. Kartu diberi garis merah — seret ke slot atau bulan lain untuk memperbaikinya.",
-      "set.title":"Pengaturan","done":"Selesai","ev.markDone":"Tandai selesai","ev.markUndone":"Batalkan selesai","set.completed":"Card yang selesai","set.show":"Tampilkan","set.hide":"Sembunyikan","set.sample":"Data contoh","set.sampleHint":"MENGHAPUS SEMUA card dan rencana kamu (semua tahun) lalu menggantinya dengan contoh yang menunjukkan semua fitur. Pengaturan tetap tersimpan.","set.sampleAdd":"Hapus semua & muat contoh","set.sampleConfirm":"Klik lagi untuk menghapus semua","set.money":"Mata uang dan format angka","set.currency":"Mata uang","set.numFormat":"Format angka",
+      "set.title":"Pengaturan","done":"Selesai","ev.markDone":"Tandai selesai","ev.markUndone":"Batalkan selesai","set.completed":"Card yang selesai","set.show":"Tampilkan","set.hide":"Sembunyikan","set.sample":"Data contoh","set.drive":"Google Drive","set.driveHint":"Masuk untuk mencadangkan & menyinkronkan planner kamu di semua perangkat.","set.driveLogin":"Masuk ke Google Drive","set.sampleHint":"MENGHAPUS SEMUA card dan rencana kamu (semua tahun) lalu menggantinya dengan contoh yang menunjukkan semua fitur. Pengaturan tetap tersimpan.","set.sampleAdd":"Hapus semua & muat contoh","set.sampleConfirm":"Klik lagi untuk menghapus semua","set.money":"Mata uang dan format angka","set.currency":"Mata uang","set.numFormat":"Format angka",
       "set.decimals":"Desimal","dec.0":"Bilangan bulat","dec.2":"2 angka","set.preview":"Pratinjau","cur.none":"Tanpa simbol",
       "set.language":"Bahasa","set.appearance":"Tampilan","set.theme":"Tema","theme.light":"Terang","theme.dark":"Gelap","theme.system":"Sistem",
       "set.accent":"Warna aksen","set.accentMain":"Utama","set.accentMoney":"Keuangan","set.density":"Kerapatan",
       "density.comfortable":"Nyaman","density.compact":"Rapat","set.reset":"Kembalikan ke bawaan","set.done":"Selesai",
       "ac.blue":"Biru","ac.indigo":"Nila","ac.purple":"Ungu","ac.rose":"Mawar","ac.orange":"Oranye","ac.teal":"Tosca","ac.green":"Hijau","ac.graphite":"Grafit",
-      "drive.connect":"Hubungkan Google Drive","drive.connecting":"Menghubungkan…","drive.saving":"Menyimpan…","drive.synced":"Tersinkron ke Drive","drive.error":"Gagal sinkron — klik untuk coba lagi","drive.reconnect":"Sambungkan ulang Drive","drive.setup":"Sinkron Drive belum disetel"
+      "drive.connect":"Hubungkan Google Drive","drive.connecting":"Menghubungkan…","drive.saving":"Menyimpan…","drive.synced":"Tersinkron ke Drive","drive.error":"Gagal sinkron — klik untuk coba lagi","drive.reconnect":"Sambungkan ulang Drive","drive.setup":"Sinkron Drive belum disetel",
+      "drive.landing.title":"Sinkron dengan Google Drive","drive.landing.desc":"Masuk untuk menjaga planner kamu tetap tercadangkan & tersinkron di semua perangkat.","drive.landing.expiredTitle":"Sesi login kamu berakhir","drive.landing.expiredDesc":"Masuk lagi untuk melanjutkan sinkron ke Google Drive.","drive.landing.connecting":"Membuka login Google…","drive.landing.failed":"Login gagal atau dibatalkan. Coba lagi, atau lanjut tanpa Drive.","drive.landing.signin":"Masuk dengan Google","drive.landing.skip":"Lanjut tanpa Drive"
     }
   };
 
@@ -783,6 +820,8 @@ try{
   const DRIVE_SCOPE = "https://www.googleapis.com/auth/drive.appdata";
   const DRIVE_FILE_NAME = "planner_data_v1.json";
   const DRIVE_CONNECTED_KEY = "planner_drive_connected_v1";
+  const DRIVE_TOKEN_KEY = "planner_drive_token_v1"; // persisted {token, exp} so a reload doesn't need a fresh login
+  const DRIVE_LANDING_SKIP_KEY = "planner_drive_landing_skip_v1"; // sessionStorage: user chose "continue without Drive"
   let driveTokenClient = null;
   let driveAccessToken = null;
   let driveFileId = null;
@@ -911,6 +950,53 @@ try{
   // hidden Drive "appDataFolder" (not visible in their normal My
   // Drive), scoped to whichever Google account they connect with.
   // ============================================================
+  // ---- token persistence (survives a page reload; Google access tokens live ~1h) ----
+  function storeDriveToken(token, expiresInSeconds){
+    try{
+      const exp = Date.now() + (Number(expiresInSeconds || 3600) * 1000) - 60000; // 60s safety buffer
+      localStorage.setItem(DRIVE_TOKEN_KEY, JSON.stringify({ token, exp }));
+    }catch(e){}
+  }
+  function getStoredDriveToken(){
+    try{
+      const raw = localStorage.getItem(DRIVE_TOKEN_KEY);
+      if(!raw) return null;
+      const data = JSON.parse(raw);
+      if(data && data.token && data.exp > Date.now()) return data.token;
+      localStorage.removeItem(DRIVE_TOKEN_KEY);
+    }catch(e){}
+    return null;
+  }
+  function clearStoredDriveToken(){
+    try{ localStorage.removeItem(DRIVE_TOKEN_KEY); }catch(e){}
+  }
+
+  // ---- landing page (shown when signed out / session expired, with a "skip" option) ----
+  function showDriveLanding(mode){
+    const overlay = document.getElementById("driveLandingOverlay");
+    if(!overlay) return;
+    const title = document.getElementById("dlTitle");
+    const desc = document.getElementById("dlDesc");
+    const status = document.getElementById("dlStatus");
+    if(mode === "reconnect"){
+      if(title) title.textContent = t("drive.landing.expiredTitle");
+      if(desc) desc.textContent = t("drive.landing.expiredDesc");
+    } else {
+      if(title) title.textContent = t("drive.landing.title");
+      if(desc) desc.textContent = t("drive.landing.desc");
+    }
+    if(status) status.textContent = "";
+    overlay.classList.add("open");
+  }
+  function hideDriveLanding(){
+    const overlay = document.getElementById("driveLandingOverlay");
+    if(overlay) overlay.classList.remove("open");
+  }
+  function maybeShowDriveLanding(mode){
+    try{ if(sessionStorage.getItem(DRIVE_LANDING_SKIP_KEY) === "1") return; }catch(e){}
+    showDriveLanding(mode);
+  }
+
   function waitForGIS(cb, triesLeft){
     triesLeft = (triesLeft == null) ? 150 : triesLeft;
     if(window.google && google.accounts && google.accounts.oauth2){ cb(); return; }
@@ -936,6 +1022,8 @@ try{
     label.textContent = map[state] || map.idle;
     const xBtn = document.getElementById("driveDisconnectBtn");
     if(xBtn) xBtn.style.display = (state === "synced" || state === "saving") ? "" : "none";
+    const sStatus = document.getElementById("sDriveStatus");
+    if(sStatus) sStatus.textContent = map[state] || map.idle;
   }
 
   function initDrive(){
@@ -949,22 +1037,50 @@ try{
       callback: (resp)=>{
         if(resp && resp.access_token){
           driveAccessToken = resp.access_token;
+          storeDriveToken(resp.access_token, resp.expires_in);
           try{ localStorage.setItem(DRIVE_CONNECTED_KEY, "1"); }catch(e){}
+          try{ sessionStorage.removeItem(DRIVE_LANDING_SKIP_KEY); }catch(e){}
+          hideDriveLanding();
           driveOnConnected();
         } else {
-          setDriveState(localStorage.getItem(DRIVE_CONNECTED_KEY) === "1" ? "reconnect" : "idle");
+          const wasConnected = localStorage.getItem(DRIVE_CONNECTED_KEY) === "1";
+          setDriveState(wasConnected ? "reconnect" : "idle");
+          if(wasConnected) maybeShowDriveLanding("reconnect");
         }
       },
       error_callback: ()=>{
-        setDriveState(localStorage.getItem(DRIVE_CONNECTED_KEY) === "1" ? "reconnect" : "idle");
+        const wasConnected = localStorage.getItem(DRIVE_CONNECTED_KEY) === "1";
+        setDriveState(wasConnected ? "reconnect" : "idle");
+        const status = document.getElementById("dlStatus");
+        if(status) status.textContent = t("drive.landing.failed");
+        if(wasConnected) maybeShowDriveLanding("reconnect");
       }
     });
-    setDriveState("idle");
-    // previously connected in this browser -> try to reconnect silently (no popup)
-    if(localStorage.getItem(DRIVE_CONNECTED_KEY) === "1"){
+
+    // 1) a still-valid token survived from an earlier page load -> use it straight away,
+    //    no popup, no landing page.
+    const stored = getStoredDriveToken();
+    if(stored){
+      driveAccessToken = stored;
+      hideDriveLanding();
       setDriveState("connecting");
-      driveTokenClient.requestAccessToken({ prompt: "" });
+      driveOnConnected();
+      return;
     }
+
+    // 2) previously connected but the token has expired -> invite the user back via the
+    //    landing page, while also trying a silent (popup-free) refresh in the background
+    //    in case the browser allows it.
+    if(localStorage.getItem(DRIVE_CONNECTED_KEY) === "1"){
+      setDriveState("reconnect");
+      maybeShowDriveLanding("reconnect");
+      driveTokenClient.requestAccessToken({ prompt: "" });
+      return;
+    }
+
+    // 3) never connected before -> invite via the landing page (skippable).
+    setDriveState("idle");
+    maybeShowDriveLanding("idle");
   }
 
   async function driveFetch(url, opts, _retried){
@@ -2478,6 +2594,8 @@ try{
     try{ return new Intl.DisplayNames([S.lang], {type:"currency"}).of(code) || code; }catch(e){ return code; }
   }
   function refreshSettingsUI(){
+    const sStatus0 = document.getElementById("sDriveStatus");
+    if(sStatus0) setDriveState(driveState);
     // currency select
     sCurrency.innerHTML = "";
     Object.keys(CURRENCIES).forEach(code=>{
@@ -2522,6 +2640,11 @@ try{
   document.getElementById("sDoneBtn").addEventListener("click", closeSettings);
   settingsOverlay.addEventListener("click", (e)=>{ if(e.target === settingsOverlay) closeSettings(); });
   document.addEventListener("keydown", (e)=>{ if(e.key === "Escape" && settingsOverlay.classList.contains("open")) closeSettings(); });
+  document.getElementById("sDriveLoginBtn").addEventListener("click", ()=>{
+    closeSettings();
+    const wasConnected = localStorage.getItem(DRIVE_CONNECTED_KEY) === "1";
+    showDriveLanding(wasConnected && driveState !== "synced" ? "reconnect" : "idle");
+  });
   // "Delete all & load samples": wipes every card/plan of every year first, then loads the samples.
   // Two clicks (the first one arms the button for 5 seconds) so it can't be triggered by accident.
   const sSampleBtn = document.getElementById("sSampleBtn");
@@ -2576,8 +2699,25 @@ try{
     }
     driveAccessToken = null; driveFileId = null;
     try{ localStorage.removeItem(DRIVE_CONNECTED_KEY); }catch(e){}
+    clearStoredDriveToken();
     setDriveState("idle");
   });
+
+  // ---------- Drive landing page wiring ----------
+  const dlConnectBtn = document.getElementById("dlConnectBtn");
+  const dlSkipBtn = document.getElementById("dlSkipBtn");
+  if(dlConnectBtn) dlConnectBtn.addEventListener("click", ()=>{
+    if(!driveTokenClient) return;
+    const status = document.getElementById("dlStatus");
+    if(status) status.textContent = t("drive.landing.connecting");
+    setDriveState("connecting");
+    driveTokenClient.requestAccessToken({ prompt: "consent" });
+  });
+  if(dlSkipBtn) dlSkipBtn.addEventListener("click", ()=>{
+    try{ sessionStorage.setItem(DRIVE_LANDING_SKIP_KEY, "1"); }catch(e){}
+    hideDriveLanding();
+  });
+
   waitForGIS(initDrive);
 
   applyAppearance();
