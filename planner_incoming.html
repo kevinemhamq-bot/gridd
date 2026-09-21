@@ -1,0 +1,2590 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>GRIDD</title>
+<script>
+try{
+  var _s=(JSON.parse(localStorage.getItem("planner_data_v1")||"{}").settings)||{};
+  var _t=_s.theme||"light";
+  if(_t==="system") _t=(window.matchMedia&&matchMedia("(prefers-color-scheme: dark)").matches)?"dark":"light";
+  document.documentElement.setAttribute("data-theme",_t);
+  document.documentElement.setAttribute("data-density",_s.density||"comfortable");
+}catch(e){}
+</script>
+<style>
+  :root{
+    color-scheme:light;
+    --bg:#ffffff;
+    --surface:#ffffff;
+    --border:#e3e3e3;
+    --text:#3c4043;
+    --muted:#5f6368;
+    --chip-bg:#f1f3f4;
+    --chip-hover:#e2e5e8;
+    --row-hover:#f5f7fa;
+    --blue:#1a73e8;          /* main accent (fills) */
+    --accent-fg:#1a73e8;     /* main accent used as text */
+    --money:#0d8043;         /* money accent (fills) */
+    --money-fg:#0d8043;      /* money accent used as text */
+    --t1:10%; --t2:6%; --t3:28%;
+    --accent-tint:color-mix(in srgb, var(--blue) var(--t1), var(--bg));
+    --accent-tint-2:color-mix(in srgb, var(--blue) var(--t2), var(--bg));
+    --accent-border:color-mix(in srgb, var(--blue) var(--t3), var(--bg));
+    --accent-hover:color-mix(in srgb, var(--blue) 85%, black);
+    --money-tint:color-mix(in srgb, var(--money) var(--t1), var(--bg));
+    --money-border:color-mix(in srgb, var(--money) var(--t3), var(--bg));
+    --money-hover:color-mix(in srgb, var(--money) 82%, black);
+    --danger-bg:#fdecea; --danger-text:#8c1d13; --danger-border:#f6c6c0;
+    --expense-fg:#d50000;
+
+    /* density: comfortable (default) */
+    --row-min-h:50px; --label-pad-y:12px; --label-font:14px; --chip-pad-y:9px;
+    --ev-pad-y:6px; --ev-pad-x:10px; --ev-font:13px; --ev-margin-y:5px; --note-font:11.5px;
+    --ev-amount-pb:20px; --amt-bottom:4px; --plan-pad-y:6px; --plan-font:13.5px;
+
+    --tomato:#d50000; --flamingo:#e67c73; --tangerine:#f4511e; --banana:#f6bf26;
+    --sage:#33b679; --basil:#0b8043; --peacock:#039be5; --blueberry:#3f51b5;
+    --lavender:#7986cb; --grape:#8e24aa; --graphite:#616161;
+  }
+  :root[data-theme="dark"]{
+    color-scheme:dark;
+    --bg:#202124; --surface:#292a2d; --border:#3c4043; --text:#e8eaed; --muted:#9aa0a6;
+    --chip-bg:#303134; --chip-hover:#3c4043; --row-hover:#2a2b2e;
+    --t1:20%; --t2:12%; --t3:42%;
+    --danger-bg:#3b1f1c; --danger-text:#f6b8b1; --danger-border:#6b2d27;
+    --expense-fg:#f28b82;
+  }
+  :root[data-density="compact"]{
+    --row-min-h:34px; --label-pad-y:6px; --label-font:13px; --chip-pad-y:4px;
+    --ev-pad-y:3px; --ev-pad-x:8px; --ev-font:12px; --ev-margin-y:3px; --note-font:10.5px;
+    --ev-amount-pb:17px; --amt-bottom:2px; --plan-pad-y:3px; --plan-font:13px;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    font-family:"Google Sans","Segoe UI",Roboto,Arial,sans-serif;
+    background:var(--bg); color:var(--text); display:flex;
+  }
+
+  /* Sidebar */
+  .sidebar{ width:240px; min-height:100vh; padding:14px 12px; border-right:1px solid var(--border); display:flex; flex-direction:column; transition:background .15s, box-shadow .15s; }
+  .sidebar.drag-over{ background:var(--accent-tint); box-shadow:inset 0 0 0 2px var(--blue); }
+  .brand{ display:flex; align-items:center; gap:10px; padding:4px 8px 14px 8px; font-size:20px; font-weight:500; }
+  .brand .dot{ width:30px; height:30px; border-radius:8px; background:linear-gradient(135deg,#4285f4,#34a853 34%,#fbbc05 67%,#ea4335); flex:none; }
+  .add-plan{ display:flex; align-items:center; gap:8px; background:var(--chip-bg); border-radius:24px; padding:4px 4px 4px 14px; margin-bottom:14px; }
+  .add-plan input{ border:none; outline:none; background:transparent; font-size:14px; width:100%; color:var(--text); font-family:inherit; }
+  .add-plan button{
+    flex:none; width:28px; height:28px; border-radius:50%; border:none; background:var(--blue); color:#fff;
+    font-size:18px; line-height:1; cursor:pointer; display:flex; align-items:center; justify-content:center;
+  }
+  .add-plan button:hover{ background:var(--accent-hover); }
+  .plan-list-title{ font-size:12px; font-weight:600; letter-spacing:.4px; margin:4px 8px 6px; color:var(--muted); text-transform:uppercase; }
+  #planList{ position:relative; }
+  .drop-indicator{ height:2px; background:var(--blue); border-radius:2px; margin:4px 12px; }
+  .row-line.drop-target{ background:var(--accent-tint); }
+  .plan-item{ display:flex; align-items:center; gap:10px; padding:var(--plan-pad-y) 10px; border-radius:18px; font-weight:500; font-size:var(--plan-font); margin-bottom:1px; cursor:grab; user-select:none; border:1px solid transparent; touch-action:none; }
+  .plan-item:active{ cursor:grabbing; }
+  .plan-item.pulse{ animation:plan-pulse .22s ease-out; }
+  @keyframes plan-pulse{
+    0%{ transform:scale(1); }
+    40%{ transform:scale(.94); background:var(--chip-bg); }
+    100%{ transform:scale(1); }
+  }
+  .plan-item.holding, .event.holding{ animation:item-shake .28s ease-in-out infinite; }
+  @keyframes item-shake{
+    0%,100%{ transform:translateX(0) rotate(0deg); }
+    20%{ transform:translateX(-2px) rotate(-1deg); }
+    40%{ transform:translateX(2px) rotate(1deg); }
+    60%{ transform:translateX(-2px) rotate(-1deg); }
+    80%{ transform:translateX(2px) rotate(1deg); }
+  }
+  .plan-item:hover{ background:var(--chip-bg); }
+  .plan-item:hover .plan-del{ opacity:1; }
+  .plan-item.active{ background:var(--accent-tint); border-color:var(--accent-border); }
+  .plan-item .swatch{ width:15px; height:15px; border-radius:4px; flex:none; }
+  .plan-item .plan-name{ flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .plan-item .plan-del{ opacity:0; flex:none; color:var(--muted); font-size:15px; padding:2px 4px; border-radius:6px; transition:opacity .15s; }
+  .plan-item .plan-del:hover{ background:var(--chip-hover); color:var(--tomato); }
+  .plan-item .plan-badge{
+    width:15px; height:15px; border-radius:4px; flex:none;
+  }
+  .plan-item .plan-icons svg{ width:13px; height:13px; display:block; }
+  .empty-plans{ font-size:12.5px; color:var(--muted); padding:6px 12px; line-height:1.4; }
+  .hint{ font-size:12px; color:var(--muted); padding:4px 10px; line-height:1.35; }
+  .settings{ margin-top:auto; display:flex; align-items:center; gap:10px; color:var(--muted); font-size:13.5px; padding:8px 10px; border-radius:18px; cursor:pointer;}
+  .settings:hover{ background:var(--chip-bg); }
+  .settings svg{ flex:none; display:block; }
+  .settings:focus-visible, .seg button:focus-visible, .swatch-btn:focus-visible{ outline:2px solid var(--accent-fg); outline-offset:2px; }
+
+  /* Main */
+  .main{ flex:1; padding:14px 24px 40px; }
+  .topbar{ display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; }
+  .year-nav{ display:flex; align-items:center; gap:8px; }
+  .nav-btn{ width:34px; height:34px; border-radius:50%; border:none; background:transparent; display:flex; align-items:center; justify-content:center; cursor:pointer; color:var(--muted); font-size:18px; }
+  .nav-btn:hover{ background:var(--chip-bg); }
+  .year-title{ font-size:22px; font-weight:400; margin-left:8px; }
+  .top-actions{ display:flex; flex:none; gap:10px; }
+  .btn{ border-radius:18px; padding:7px 16px; font-size:13.5px; font-weight:500; border:1px solid var(--border); background:var(--surface); cursor:pointer; color:var(--text); }
+  .btn:hover{ background:var(--chip-bg); }
+  .btn-primary{ color:var(--accent-fg); border:1px solid var(--border); display:flex; align-items:center; gap:6px; box-shadow:0 1px 2px 0 rgba(60,64,67,.3),0 1px 3px 1px rgba(60,64,67,.15); }
+  .btn-primary:hover{ background:var(--accent-tint-2); }
+  .btn-money{ color:var(--money-fg); border:1px solid var(--money-border); background:var(--surface); display:flex; align-items:center; gap:6px; }
+  .btn-money:hover{ background:var(--money-tint); }
+  .btn-money svg{ flex:none; }
+  .main{ position:relative; }
+  .recap-tab{
+    flex:none; width:36px; height:36px; padding:0; margin-right:-24px; display:flex; align-items:center; justify-content:center;
+    background:var(--money); color:#fff; border:1px solid var(--money); border-right:none; border-radius:20px 0 0 20px;
+    box-shadow:-2px 2px 6px rgba(0,0,0,.28), 0 1px 3px rgba(0,0,0,.2);
+    cursor:pointer; transition:background .15s;
+  }
+  .recap-tab:hover{ background:var(--money-hover); }
+  .recap-tab.active{ background:var(--money-hover); }
+
+  .grid{
+    background:var(--bg); border-radius:12px; border:1px solid var(--border);
+    display:grid; grid-template-columns:150px 120px repeat(var(--yslots,6), minmax(110px,1fr));
+    grid-auto-rows:auto; column-gap:8px; overflow-x:auto; overflow-y:hidden; position:relative;
+    padding-right:14px;
+  }
+  .row-line{ grid-column:1 / -1; border-bottom:1px solid var(--border); transition:background .3s; }
+  .row-line.today{ background:var(--accent-tint); }
+  .row-line.current-month{ background:var(--accent-tint-2); box-shadow:inset 3px 0 0 var(--blue); }
+  .row-line.row-hover{ background:var(--row-hover); }
+  .row-line.current-month.row-hover{ background:var(--accent-tint); }
+  .row-line.current-month.today{ background:var(--accent-tint); }   /* brief flash on today's row */
+  .month-label{ min-height:var(--row-min-h); display:flex; align-items:center; gap:8px; padding:var(--label-pad-y) 0 var(--label-pad-y) 16px; font-weight:500; font-size:var(--label-font); cursor:pointer; border-radius:8px; transition:opacity .2s; }
+  .month-label:hover{ color:var(--accent-fg); }
+  .month-label.dimmed{ opacity:.3; }
+  .month-label.current-month{ color:var(--accent-fg); font-weight:700; }
+  .current-badge{
+    font-size:10.5px; font-weight:700; color:#fff; background:var(--blue); border-radius:10px;
+    padding:2px 8px; letter-spacing:.2px; align-self:center;
+  }
+  .task-chip-cell{ min-height:var(--row-min-h); display:flex; align-items:stretch; padding:var(--chip-pad-y) 8px var(--chip-pad-y) 0; transition:opacity .2s; }
+  .task-chip-cell.dimmed{ opacity:.3; }
+  .task-chip{ background:var(--chip-bg); color:var(--muted); font-size:12px; padding:5px 10px; border-radius:12px; font-weight:500; font-style:italic; cursor:pointer; width:100%; box-sizing:border-box; text-align:center; display:flex; align-items:center; justify-content:center; gap:6px; position:relative; }
+  .task-chip .note-dot{ width:6px; height:6px; border-radius:50%; background:var(--blue); flex:none; }
+  .task-chip:hover{ background:var(--chip-hover); }
+
+  .event{ display:flex; flex-direction:column; align-items:flex-start; justify-content:flex-start; text-align:left; gap:2px; color:#fff; font-weight:500; font-size:var(--ev-font);
+    padding:var(--ev-pad-y) var(--ev-pad-x); border-radius:8px; align-self:flex-start; margin:var(--ev-margin-y) 0; cursor:grab; touch-action:none; user-select:none;
+    box-shadow:0 1px 3px rgba(0,0,0,.18), 1px 0 2px rgba(0,0,0,.06), inset 0 0 0 1px rgba(255,255,255,.28);
+    transition:opacity .2s, box-shadow .15s, transform .15s; position:relative; overflow:hidden; }
+  .event:hover{ box-shadow:0 4px 10px rgba(0,0,0,.28), inset 0 0 0 1px rgba(255,255,255,.4); transform:translateY(-2px); z-index:5; }
+  .event .ev-title{ font-weight:500; }
+  .event.has-amount{ padding-bottom:var(--ev-amount-pb); }
+  .event .amount-preview{
+    font-size:10px; font-weight:700; font-style:italic; opacity:.95;
+    position:absolute; right:8px; bottom:var(--amt-bottom);
+  }
+  .event .note-preview{
+    font-size:var(--note-font); font-weight:400; opacity:.85; width:100%; box-sizing:border-box;
+    display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:3;
+    overflow:hidden; text-overflow:ellipsis; white-space:normal; line-height:1.3;
+  }
+  .event.span{ align-self:stretch; }
+  .event.shaded::before{
+    content:""; position:absolute; inset:0; z-index:0; pointer-events:none; border-radius:inherit;
+    background:linear-gradient(to bottom, rgba(0,0,0,0) 0%, rgba(0,0,0,.45) 100%);
+    opacity:0; transition:opacity .24s ease;
+  }
+  .event.shaded.shade-on::before{ opacity:1; }
+  .event.shaded > .ev-title, .event.shaded > .note-preview, .event.shaded > .amount-preview{ z-index:1; }
+  @media (prefers-reduced-motion: reduce){ .event.shaded::before{ transition:none; } }
+  .event.dimmed{ opacity:.2; }
+  .event.done{ opacity:.62; }
+  .event.done .ev-title{ text-decoration:line-through; text-decoration-thickness:1.5px; }
+  .ev-check{ display:inline-block; width:12px; height:12px; margin-right:5px; vertical-align:-1px; flex:none; }
+  .check-row{ display:flex; align-items:center; gap:8px; margin:0 0 10px; font-size:13.5px; cursor:pointer; user-select:none; }
+  .check-row input{ width:16px; height:16px; margin:0; accent-color:var(--blue); cursor:pointer; }
+  .recap-trow.done .rtitle{ opacity:.6; }
+
+  /* Done toggle on the card itself */
+  .event{ --on:#fff; }
+  .event.banana{ --on:#3c2f00; }
+  /* the card's own colour, used to "cut out" the check from the filled circle */
+  .event.tomato{ --card:var(--tomato); } .event.flamingo{ --card:var(--flamingo); } .event.tangerine{ --card:var(--tangerine); }
+  .event.banana{ --card:var(--banana); } .event.sage{ --card:var(--sage); } .event.basil{ --card:var(--basil); }
+  .event.peacock{ --card:var(--peacock); } .event.blueberry{ --card:var(--blueberry); } .event.lavender{ --card:var(--lavender); }
+  .event.grape{ --card:var(--grape); } .event.graphite{ --card:var(--graphite); }
+  .done-btn{ position:absolute; z-index:7; width:24px; height:24px; padding:0; border:0; background:transparent; color:var(--on); display:flex; align-items:center; justify-content:center; cursor:pointer; transition:opacity .15s; }
+  .done-dot{ width:14px; height:14px; border-radius:50%; border:1.6px solid currentColor; opacity:.85; display:flex; align-items:center; justify-content:center; transition:transform .12s, opacity .12s, background .12s; }
+  .done-dot svg{ width:8px; height:8px; stroke:var(--card, rgba(0,0,0,.55)); opacity:0; }
+  .done-btn:hover .done-dot{ opacity:1; transform:scale(1.15); }
+  .event.done .done-dot{ background:currentColor; }   /* fill = same colour as the outline */
+  .event.done .done-dot svg{ opacity:1; }
+  .done-btn:focus-visible{ outline:2px solid var(--on); outline-offset:-2px; border-radius:50%; }
+  /* daily view: top-right corner, always visible (the title keeps clear of it) */
+  .grid.day .event{ padding-right:28px; }
+  .grid.day .done-btn{ right:3px; top:0; }
+  /* yearly view: top-right corner, shown on hover until the card is done (then always) */
+  .grid:not(.day) .done-btn{ right:3px; top:2px; }
+  .grid:not(.day) .event:not(.done) .done-btn{ opacity:0; pointer-events:none; }
+  .grid:not(.day) .event:not(.done):hover .done-btn, .grid:not(.day) .event:not(.done) .done-btn:focus-visible{ opacity:1; pointer-events:auto; }
+  .grid:not(.day) .event.done{ padding-right:26px; }
+  @media (hover:none){ .grid:not(.day) .event:not(.done) .done-btn{ display:none; } }
+  .event.dragging{ cursor:grabbing; z-index:100; box-shadow:0 10px 22px rgba(0,0,0,.32); opacity:.92; }
+  .event.resizing{ z-index:100; box-shadow:0 10px 22px rgba(0,0,0,.32); }
+
+  .resize-handle{ position:absolute; left:6px; right:6px; height:9px; cursor:ns-resize; z-index:6; display:flex; align-items:center; justify-content:center; }
+  .resize-handle.top{ top:-2px; }
+  .resize-handle.bottom{ bottom:-2px; }
+  .resize-handle::after{ content:""; width:26px; height:3px; border-radius:2px; background:rgba(255,255,255,0); transition:background .15s; }
+  .event:hover .resize-handle::after{ background:rgba(255,255,255,.55); }
+  .resize-handle:hover::after{ background:rgba(255,255,255,.9); }
+
+  .tomato{background:var(--tomato);} .flamingo{background:var(--flamingo);} .tangerine{background:var(--tangerine);}
+  .banana{background:var(--banana); color:#3c2f00;} .sage{background:var(--sage);} .basil{background:var(--basil);}
+  .peacock{background:var(--peacock);} .blueberry{background:var(--blueberry);} .lavender{background:var(--lavender);}
+  .grape{background:var(--grape);} .graphite{background:var(--graphite);}
+
+  /* Modal */
+  .overlay{
+    position:fixed; inset:0; background:rgba(0,0,0,0); display:flex; align-items:center; justify-content:center; z-index:50;
+    opacity:0; visibility:hidden; pointer-events:none;
+    transition:opacity .18s ease-out, background .18s ease-out, visibility 0s linear .18s;
+  }
+  .overlay.open{
+    background:rgba(0,0,0,.35); opacity:1; visibility:visible; pointer-events:auto;
+    transition:opacity .18s ease-out, background .18s ease-out, visibility 0s linear 0s;
+  }
+  .modal{
+    background:var(--surface); color:var(--text); border-radius:14px; padding:18px; width:360px; max-width:92vw; box-shadow:0 8px 28px rgba(0,0,0,.25);
+    transform:scale(.95) translateY(6px); opacity:0;
+    transition:transform .18s ease-out, opacity .18s ease-out;
+  }
+  .overlay.open .modal{ transform:scale(1) translateY(0); opacity:1; }
+  .modal h3{ margin:0 0 12px; font-size:17px; font-weight:600; }
+  .field{ margin-bottom:10px; }
+  .field label{ display:block; font-size:12.5px; color:var(--muted); margin-bottom:4px; font-weight:500; }
+  .field input[type=text], .field select, .field textarea{
+    width:100%; padding:7px 10px; border:1px solid var(--border); border-radius:8px; font-size:13.5px; font-family:inherit; color:var(--text); background:var(--bg);
+  }
+  .field textarea{ resize:vertical; }
+  .row2{ display:flex; gap:10px; }
+  .row2 .field{ flex:1; }
+  .swatches{ display:flex; flex-wrap:wrap; gap:8px; }
+  .swatch-btn{ width:26px; height:26px; border-radius:50%; border:2px solid transparent; cursor:pointer; }
+  .swatch-btn.selected{ border-color:var(--text); }
+  .modal-actions{ display:flex; justify-content:space-between; align-items:center; margin-top:12px; }
+  .modal-actions .right{ display:flex; gap:8px; }
+  .link-danger{ color:var(--expense-fg); background:none; border:none; font-size:13.5px; cursor:pointer; font-weight:500; padding:8px; }
+  .link-danger:hover{ text-decoration:underline; }
+  /* Recap right sidebar */
+  .main{ min-width:0; }
+  .recap-side{
+    width:0; flex:none; overflow:hidden; border-left:0 solid var(--border); background:var(--surface);
+    position:sticky; top:0; height:100vh; align-self:flex-start;
+    transition:width .22s ease, border-left-width .22s ease;
+  }
+  .recap-side.open{ width:520px; border-left:2px solid var(--money); }
+  .recap-inner{ width:520px; height:100%; display:flex; flex-direction:column; padding:14px 12px 12px; }
+  .recap-head{ display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; }
+  .recap-head h3{ margin:0; font-size:17px; font-weight:600; }
+  .recap-close{ width:32px; height:32px; border-radius:50%; border:none; background:transparent; color:var(--muted); font-size:16px; cursor:pointer; }
+  .recap-close:hover{ background:var(--chip-bg); }
+  #recapContent{ flex:1; min-height:0; display:flex; flex-direction:column; }
+  .recap-summary{ display:flex; gap:6px; margin-bottom:10px; }
+  .recap-stat{ flex:1; min-width:0; background:var(--chip-bg); border-radius:10px; padding:7px 10px; }
+  .recap-stat .label{ font-size:11px; color:var(--muted); font-weight:600; text-transform:uppercase; letter-spacing:.3px; margin-bottom:4px; }
+  .recap-stat .value{ font-size:14px; font-weight:700; }
+  .recap-stat.income .value{ color:var(--money-fg); }
+  .recap-stat.expense .value{ color:var(--expense-fg); }
+  .recap-stat.net .value{ color:var(--accent-fg); }
+  .recap-empty{ font-size:13.5px; color:var(--muted); text-align:center; padding:20px 0; }
+  .recap-table-wrap{ flex:1; min-height:0; overflow-y:auto; border:1px solid var(--border); border-radius:10px; }
+  .recap-thead, .recap-trow{
+    display:grid; grid-template-columns:38px minmax(0,1fr) 84px 84px 96px; gap:6px; padding:6px 10px; align-items:center;
+  }
+  .recap-thead{
+    position:sticky; top:0; z-index:1; background:var(--chip-bg); font-size:10.5px; font-weight:700;
+    color:var(--muted); text-transform:uppercase; letter-spacing:.3px;
+  }
+  .recap-thead .num{ text-align:right; }
+  .recap-trow{ border-top:1px solid var(--border); font-size:12.5px; cursor:pointer; }
+  .recap-trow:hover{ background:var(--chip-bg); }
+  .recap-trow .rmonth{ color:var(--muted); font-size:12px; }
+  .recap-trow .rtitle{ display:flex; align-items:center; gap:6px; font-weight:500; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0; }
+  .recap-trow .rtitle .dot{ width:8px; height:8px; border-radius:2px; flex:none; }
+  .recap-trow .rtitle .rec-tag{ font-size:10.5px; color:var(--muted); font-weight:400; font-style:italic; }
+  .recap-trow .rin{ color:var(--money-fg); font-weight:700; text-align:right; }
+  .recap-trow .rout{ color:var(--expense-fg); font-weight:700; text-align:right; }
+  .recap-trow .rsaldo{ font-weight:700; text-align:right; }
+  .btn-money.active{ background:var(--money-tint); }
+
+  .plan-ghost{
+    position:fixed; z-index:200; pointer-events:none; padding:9px 16px; border-radius:8px; color:#fff;
+    font-size:13.5px; font-weight:500; box-shadow:0 10px 24px rgba(0,0,0,.32); transform:translate(-8px,-8px) rotate(-4deg);
+    animation:ghost-wiggle 0.6s ease-in-out infinite alternate;
+  }
+  .plan-ghost-card{
+    position:fixed !important; z-index:200; pointer-events:none; margin:0 !important;
+    transform:translate(-8px,-8px) rotate(-4deg); max-width:220px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+    animation:ghost-wiggle 0.6s ease-in-out infinite alternate;
+  }
+  @keyframes ghost-wiggle{
+    from{ transform:translate(-8px,-8px) rotate(-4deg); }
+    to{ transform:translate(-8px,-8px) rotate(3deg); }
+  }
+  .event.conflict{ box-shadow:0 0 0 2px var(--bg), 0 0 0 4px var(--tomato); }
+  .conflict-banner{
+    display:flex; align-items:center; gap:10px; background:var(--danger-bg); color:var(--danger-text); border:1px solid var(--danger-border);
+    border-radius:10px; padding:10px 16px; font-size:13.5px; font-weight:500; margin-bottom:14px;
+  }
+  .conflict-banner .icon{ font-size:16px; }
+  .event.more-chip{
+    background:var(--chip-bg); color:var(--muted); align-items:center; justify-content:center;
+    font-weight:600; cursor:pointer; text-align:center;
+  }
+  .event.more-chip:hover{ background:var(--chip-hover); }
+  .row-scroll{
+    display:flex; flex-wrap:wrap; align-items:stretch; gap:8px; padding:5px 0 5px 12px;
+  }
+  .row-scroll .event{ flex:0 0 calc((100% - 40px) / 6); width:calc((100% - 40px) / 6); min-width:0; max-width:none; margin:0; box-shadow:0 1px 4px rgba(0,0,0,.22); }
+  .row-scroll .event .ev-title, .row-scroll .event .note-preview{ max-width:100%; overflow-wrap:anywhere; word-break:break-word; }
+
+  /* ---------- Settings modal ---------- */
+  .settings-modal{ width:440px; max-height:90vh; overflow-y:auto; }
+  .settings-modal h3{ margin-bottom:4px; }
+  .s-section{ padding:14px 0 6px; border-top:1px solid var(--border); }
+  .s-section:first-of-type{ border-top:none; padding-top:8px; }
+  .s-section h4{ margin:0 0 10px; font-size:13.5px; font-weight:600; color:var(--text); }
+  .seg{ display:flex; border:1px solid var(--border); border-radius:18px; overflow:hidden; background:var(--bg); }
+  .seg button{ flex:1; padding:6px 10px; border:none; background:transparent; color:var(--text); font:inherit; font-size:13px; cursor:pointer; white-space:nowrap; }
+  .seg button + button{ border-left:1px solid var(--border); }
+  .seg button:hover{ background:var(--chip-bg); }
+  .seg button.on{ background:var(--accent-tint); color:var(--accent-fg); font-weight:600; }
+  .s-preview{ display:flex; align-items:baseline; gap:12px; flex-wrap:wrap; background:var(--chip-bg); border-radius:10px; padding:8px 12px; margin-bottom:8px; font-size:13px; color:var(--muted); }
+  .s-preview b{ color:var(--text); font-weight:700; font-variant-numeric:tabular-nums; }
+  .accent-row{ display:flex; align-items:center; gap:12px; margin-bottom:8px; }
+  .accent-row > span{ width:76px; flex:none; font-size:13px; color:var(--muted); }
+  .btn.armed{ background:var(--danger-bg); color:var(--danger-text); border-color:var(--danger-border); }
+  .s-note{ margin:0 0 10px; font-size:12.5px; line-height:1.4; color:var(--muted); }
+  .link-muted{ color:var(--muted); background:none; border:none; font-size:13.5px; cursor:pointer; font-weight:500; padding:8px; font-family:inherit; }
+  .link-muted:hover{ text-decoration:underline; color:var(--text); }
+
+  /* ---------- Daily view ---------- */
+  .grid.day{ grid-template-columns:150px repeat(var(--slots,6), minmax(110px,1fr)); }
+  .day-label{ min-height:32px; display:flex; align-items:center; gap:8px; padding:4px 0 4px 16px; font-size:var(--label-font); cursor:pointer; border-radius:8px; }
+  .day-label:hover{ color:var(--accent-fg); }
+  .day-label .d-num{ width:22px; text-align:right; font-weight:600; font-variant-numeric:tabular-nums; }
+  .day-label .d-name{ color:var(--muted); font-size:12px; }
+  .day-label.is-today{ color:var(--accent-fg); font-weight:700; }
+  .day-label.is-today .d-name{ color:inherit; }
+  .row-line.weekend:not(.current-month){ background:color-mix(in srgb, var(--chip-bg) 60%, var(--bg)); }
+  .row-line.weekend.row-hover:not(.current-month){ background:var(--row-hover); }
+  .day-count{ display:none; align-items:center; gap:8px; font-size:12.5px; color:var(--muted); }
+  .day-count-val{ min-width:28px; padding:3px 10px; border-radius:12px; background:var(--chip-bg); color:var(--text); font-size:13px; font-weight:700; text-align:center; font-variant-numeric:tabular-nums; }
+  .grid.day .event{ cursor:pointer; margin:2px 0; padding-top:3px; }
+  .grid.day .event:not(.has-amount){ padding-bottom:3px; }
+  @media (max-width:1180px){ .grid.day{ grid-template-columns:110px repeat(var(--slots,6), minmax(110px,1fr)); } }
+
+  /* ---------- Responsive ---------- */
+  .topbar{ flex-wrap:wrap; gap:10px 12px; }
+  .top-actions{ margin-left:auto; }
+
+  @media (max-width:1180px){
+    .sidebar{ width:200px; }
+    .grid{ grid-template-columns:110px 100px repeat(var(--yslots,6), minmax(110px,1fr)); }
+  }
+
+  /* Summary becomes an overlay drawer so it never squeezes the calendar */
+  @media (max-width:1280px){
+    .recap-side{ position:fixed; top:0; right:0; z-index:40; box-shadow:-8px 0 24px rgba(0,0,0,.18); }
+    .recap-side.open{ width:min(520px, 100vw); }
+    .recap-inner{ width:min(520px, 100vw); }
+  }
+
+  /* Small screens: plans move to a compact strip on top */
+  @media (max-width:820px){
+    body{ flex-direction:column; }
+    .sidebar{ width:100%; min-height:0; border-right:none; border-bottom:1px solid var(--border); padding:10px 12px; }
+    .brand{ padding:0 4px 8px; }
+    .add-plan{ margin-bottom:8px; }
+    #planList{ max-height:140px; overflow-y:auto; }
+    .hint{ display:none; }
+    /* Settings leaves the plan list and sits in the header row as its own outlined button,
+       so it can't be mistaken for one more plan item */
+    .sidebar{ position:relative; }
+    .settings{ position:absolute; top:10px; right:12px; margin:0; padding:5px 12px 5px 10px; border:1px solid var(--border); background:var(--surface); }
+    .main{ padding:12px 12px 32px; }
+    .recap-tab{ margin-right:-12px; }
+  }
+
+  /* Google Drive sync widget */
+  .drive-sync{ display:flex; align-items:center; gap:10px; color:var(--muted); font-size:13.5px; padding:8px 10px; border-radius:18px; cursor:pointer; margin-top:2px; }
+  .drive-sync:hover{ background:var(--chip-bg); }
+  .drive-sync svg{ flex:none; display:block; }
+  .drive-sync .drive-label{ flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .drive-dot{ width:8px; height:8px; border-radius:50%; background:var(--muted); flex:none; transition:background .2s; }
+  .drive-sync[data-state="connecting"] .drive-dot, .drive-sync[data-state="saving"] .drive-dot{ background:#f6bf26; animation:drive-pulse 1s ease-in-out infinite; }
+  .drive-sync[data-state="synced"] .drive-dot{ background:var(--money); }
+  .drive-sync[data-state="error"] .drive-dot, .drive-sync[data-state="reconnect"] .drive-dot{ background:var(--tomato); }
+  .drive-sync[data-state="setup"]{ opacity:.55; cursor:not-allowed; }
+  @keyframes drive-pulse{ 0%,100%{ opacity:1; } 50%{ opacity:.3; } }
+  .drive-x{ flex:none; opacity:0; padding:2px 5px; border-radius:6px; font-size:13px; color:var(--muted); }
+  .drive-sync:hover .drive-x{ opacity:1; }
+  .drive-x:hover{ background:var(--chip-hover); color:var(--tomato); }
+</style>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+</head>
+<body>
+
+  <div class="sidebar">
+    <div class="brand"><div class="dot"></div> GRIDD</div>
+    <div class="add-plan">
+      <input id="planInput" type="text" placeholder="Add a new plan..." data-i18n-ph="plan.placeholder">
+      <button id="planAddBtn" title="Add plan" data-i18n-title="plan.add">+</button>
+    </div>
+    <div class="plan-list-title" data-i18n="plans">Plans</div>
+    <div id="planList"></div>
+    <div class="hint" data-i18n="hint">Drag a plan onto the calendar to add a new event.</div>
+    <div class="drive-sync" id="driveSyncBtn" role="button" tabindex="0" data-state="idle">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 16.58A5 5 0 0 0 18 7h-1.26A8 8 0 1 0 4 15.25"/><polyline points="12 12 12 21"/><polyline points="15 18 12 21 9 18"/></svg>
+      <span class="drive-label" id="driveSyncLabel">Connect Google Drive</span>
+      <span class="drive-dot"></span>
+      <span class="drive-x" id="driveDisconnectBtn" title="Disconnect">✕</span>
+    </div>
+    <div class="settings" id="settingsBtn" role="button" tabindex="0"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg><span data-i18n="settings">Settings</span></div>
+  </div>
+
+  <div class="main">
+    <div class="topbar">
+      <div class="year-nav">
+        <button class="btn" id="backBtn" style="display:none;" data-i18n="day.back">‹ Year</button>
+        <button class="nav-btn" id="prevYear">&#8249;</button>
+        <button class="nav-btn" id="nextYear">&#8250;</button>
+        <div class="year-title" id="yearTitle">2026</div>
+      </div>
+      <div class="top-actions">
+        <div class="day-count" id="dayCountWrap"><span data-i18n="day.count">Month plan</span><b class="day-count-val" id="dayCountVal">0</b></div>
+        <button class="btn" id="todayBtn" data-i18n="today">Today</button>
+        <button class="btn btn-primary" id="addBtn" data-i18n="event.addBtn">+ Add Event</button>
+        <button class="recap-tab" id="recapBtn" title="Summary" aria-label="Summary" data-i18n-title="summary">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5.5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H7"/></svg>
+        </button>
+      </div>
+    </div>
+
+    <div class="grid" id="grid"></div>
+  </div>
+
+  <!-- Recap right sidebar -->
+  <aside class="recap-side" id="recapSide" aria-hidden="true">
+    <div class="recap-inner">
+      <div class="recap-head">
+        <h3><span data-i18n="summary">Summary</span> — <span id="recapYear"></span></h3>
+        <button class="recap-close" id="recapCloseBtn" title="Close" data-i18n-title="close">✕</button>
+      </div>
+      <div id="recapContent"></div>
+    </div>
+  </aside>
+
+  <!-- Modal -->
+  <div class="overlay" id="overlay">
+    <div class="modal">
+      <h3 id="modalTitle">Add Event</h3>
+      <div class="field">
+        <label data-i18n="event.title">Event title</label>
+        <input type="text" id="fTitle" placeholder="e.g. Annual meeting" data-i18n-ph="event.titlePh">
+      </div>
+      <label class="check-row"><input type="checkbox" id="fDone"><span data-i18n="done">Done</span></label>
+      <div class="row2">
+        <div class="field">
+          <label data-i18n="event.start" id="lblStartMonth">Start month</label>
+          <select id="fStart"></select>
+        </div>
+        <div class="field" id="endMonthField">
+          <label data-i18n="event.end">End month</label>
+          <select id="fEnd"></select>
+        </div>
+      </div>
+      <div class="row2" id="dayFieldsRow">
+        <div class="field">
+          <label data-i18n="event.startDay">Start day (optional)</label>
+          <input type="text" id="fStartDay" inputmode="numeric" placeholder="—">
+        </div>
+        <div class="field">
+          <label data-i18n="event.endDay">End day (optional)</label>
+          <input type="text" id="fEndDay" inputmode="numeric" placeholder="—">
+        </div>
+      </div>
+      <div class="field">
+        <label data-i18n="color">Color</label>
+        <div class="swatches" id="swatches"></div>
+      </div>
+      <div class="field">
+        <label class="amount-label">Amount (Rp)</label>
+        <input type="text" id="fAmount" inputmode="text" placeholder="">
+      </div>
+      <div class="field">
+        <label data-i18n="note">Note</label>
+        <textarea id="fNote" rows="3" placeholder="Add a note for this event..." data-i18n-ph="event.notePh"></textarea>
+      </div>
+      <div class="modal-actions">
+        <button class="link-danger" id="deleteBtn" style="display:none;" data-i18n="event.delete">Delete event</button>
+        <div class="right">
+          <button class="btn" id="cancelBtn" data-i18n="cancel">Cancel</button>
+          <button class="btn btn-primary" id="saveBtn" data-i18n="save">Save</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Task modal -->
+  <div class="overlay" id="taskOverlay">
+    <div class="modal">
+      <h3 id="taskModalTitle">Daily Tasks</h3>
+      <div class="field">
+        <label data-i18n="task.count">Number of daily tasks</label>
+        <input type="text" id="tCount" inputmode="numeric" placeholder="0">
+      </div>
+      <div class="field">
+        <label data-i18n="note">Note</label>
+        <textarea id="tNote" rows="4" placeholder="Write a note for this month..." data-i18n-ph="task.notePh"></textarea>
+      </div>
+      <div class="modal-actions">
+        <div></div>
+        <div class="right">
+          <button class="btn" id="tCancelBtn" data-i18n="cancel">Cancel</button>
+          <button class="btn btn-primary" id="tSaveBtn" data-i18n="save">Save</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Plan modal -->
+  <div class="overlay" id="planOverlay">
+    <div class="modal">
+      <h3 data-i18n="plan.edit">Edit Plan</h3>
+      <div class="field">
+        <label data-i18n="plan.name">Plan name</label>
+        <input type="text" id="pName" placeholder="e.g. Driving lessons" data-i18n-ph="plan.namePh">
+      </div>
+      <div class="field">
+        <label data-i18n="color">Color</label>
+        <div class="swatches" id="pSwatches"></div>
+      </div>
+      <div class="field">
+        <label class="amount-label">Amount (Rp)</label>
+        <input type="text" id="pAmount" inputmode="text" placeholder="">
+      </div>
+      <div class="field">
+        <label data-i18n="note">Note</label>
+        <textarea id="pNote" rows="3" placeholder="Add a note for this plan..." data-i18n-ph="plan.notePh"></textarea>
+      </div>
+      <div class="modal-actions">
+        <button class="link-danger" id="pDeleteBtn" data-i18n="plan.delete">Delete plan</button>
+        <div class="right">
+          <button class="btn" id="pCancelBtn" data-i18n="cancel">Cancel</button>
+          <button class="btn btn-primary" id="pSaveBtn" data-i18n="save">Save</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+<!-- Settings modal -->
+  <div class="overlay" id="settingsOverlay">
+    <div class="modal settings-modal" role="dialog" aria-modal="true" aria-labelledby="settingsTitle">
+      <h3 id="settingsTitle" data-i18n="set.title">Settings</h3>
+
+      <section class="s-section">
+        <h4 data-i18n="set.money">Currency and number format</h4>
+        <div class="field">
+          <label for="sCurrency" data-i18n="set.currency">Currency</label>
+          <select id="sCurrency"></select>
+        </div>
+        <div class="row2">
+          <div class="field">
+            <label for="sNumFmt" data-i18n="set.numFormat">Number format</label>
+            <select id="sNumFmt"></select>
+          </div>
+          <div class="field">
+            <label data-i18n="set.decimals">Decimals</label>
+            <div class="seg" id="sDecimals"></div>
+          </div>
+        </div>
+        <div class="s-preview"><span data-i18n="set.preview">Preview</span><b id="sPrev1"></b><b id="sPrev2"></b></div>
+      </section>
+
+      <section class="s-section">
+        <h4 data-i18n="set.language">Language</h4>
+        <div class="seg" id="sLang"></div>
+      </section>
+
+      <section class="s-section">
+        <h4 data-i18n="set.appearance">Appearance</h4>
+        <div class="field">
+          <label data-i18n="set.theme">Theme</label>
+          <div class="seg" id="sTheme"></div>
+        </div>
+        <div class="field">
+          <label data-i18n="set.accent">Accent color</label>
+          <div class="accent-row"><span data-i18n="set.accentMain">Main</span><div class="swatches" id="sAccent"></div></div>
+          <div class="accent-row"><span data-i18n="set.accentMoney">Money</span><div class="swatches" id="sMoney"></div></div>
+        </div>
+        <div class="field">
+          <label data-i18n="set.density">Density</label>
+          <div class="seg" id="sDensity"></div>
+        </div>
+      </section>
+
+      <section class="s-section">
+        <h4 data-i18n="set.completed">Completed cards</h4>
+        <div class="seg" id="sHideDone"></div>
+      </section>
+
+      <section class="s-section">
+        <h4 data-i18n="set.sample">Sample data</h4>
+        <p class="s-note" data-i18n="set.sampleHint">Deletes ALL your current cards and plans (every year) and replaces them with examples that show every feature. Your settings are kept.</p>
+        <button class="btn" id="sSampleBtn" data-i18n="set.sampleAdd">Delete all &amp; load samples</button>
+      </section>
+
+      <div class="modal-actions">
+        <button class="link-muted" id="sResetBtn" data-i18n="set.reset">Reset to defaults</button>
+        <div class="right"><button class="btn btn-primary" id="sDoneBtn" data-i18n="set.done">Done</button></div>
+      </div>
+    </div>
+  </div>
+
+<script>
+(function(){
+  // ---------- settings: defaults & lookup tables ----------
+  const DEFAULT_SETTINGS = { lang:"en", currency:"IDR", numFormat:"dot", decimals:0, theme:"light", accent:"blue", moneyAccent:"green", density:"comfortable", hideDone:false };
+
+  const CURRENCIES = {
+    IDR:{symbol:"Rp", space:true},  USD:{symbol:"$"},   EUR:{symbol:"€"},   GBP:{symbol:"£"},
+    JPY:{symbol:"¥"},               SGD:{symbol:"S$"},  MYR:{symbol:"RM", space:true},
+    AUD:{symbol:"A$"},              CNY:{symbol:"CN¥"}, INR:{symbol:"₹"},   KRW:{symbol:"₩"},
+    THB:{symbol:"฿"},               PHP:{symbol:"₱"},   VND:{symbol:"₫"},   CHF:{symbol:"CHF", space:true},
+    NONE:{symbol:""}
+  };
+  const NUMFMTS = {
+    dot:  { group:".",      dec:"," },   // 1.500.000,50
+    comma:{ group:",",      dec:"." },   // 1,500,000.50
+    space:{ group:"\u00a0", dec:"," }    // 1 500 000,50
+  };
+  // fill = colour used on fills; dark = lighter variant used as text on dark backgrounds
+  const ACCENTS = {
+    blue:{fill:"#1a73e8", dark:"#8ab4f8"}, indigo:{fill:"#3f51b5", dark:"#9fa8da"}, purple:{fill:"#8e24aa", dark:"#ce93d8"},
+    rose:{fill:"#d81b60", dark:"#f48fb1"}, orange:{fill:"#d9600a", dark:"#fdab5e"}, teal:{fill:"#00897b", dark:"#4db6ac"}
+  };
+  const MONEY_ACCENTS = {
+    green:{fill:"#0d8043", dark:"#81c995"}, teal:{fill:"#00796b", dark:"#4db6ac"}, blue:{fill:"#1a73e8", dark:"#8ab4f8"},
+    purple:{fill:"#8e24aa", dark:"#ce93d8"}, orange:{fill:"#d9600a", dark:"#fdab5e"}, graphite:{fill:"#5f6368", dark:"#bdc1c6"}
+  };
+  const MONTH_NAMES = {
+    en:["January","February","March","April","May","June","July","August","September","October","November","December"],
+    id:["Januari","Februari","Maret","April","Mei","Juni","Juli","Agustus","September","Oktober","November","Desember"]
+  };
+  const LANGS = { en:"English", id:"Bahasa Indonesia" };
+
+  const I18N = {
+    en:{
+      "plans":"Plans","day.back":"‹ Year","day.addTitle":"Click to add an event on this date","day.notes":"Monthly notes","day.notesPh":"Write notes for this month...","day.count":"Month plan","event.startDay":"Start day (optional)","event.endDay":"End day (optional)","plan.placeholder":"Add a new plan...","plan.add":"Add plan","hint":"Drag a plan onto the calendar to add a new event.",
+      "settings":"Settings","today":"Today","event.addBtn":"+ Add Event","summary":"Summary","close":"Close",
+      "event.add":"Add Event","event.edit":"Edit Event","event.title":"Event title","event.titlePh":"e.g. Annual meeting",
+      "event.start":"Start month","event.month":"Month","event.end":"End month","color":"Color","amount":"Amount",
+      "amountPh":"e.g. 1500000, -500000, or @-2000 (monthly)","amountPhDec":"e.g. 1500{d}50, -500{d}25, or @-20{d}5 (monthly)",
+      "planAmountPh":"e.g. 1500000 or -500000","planAmountPhDec":"e.g. 1500{d}50 or -500{d}25",
+      "note":"Note","event.notePh":"Add a note for this event...","event.delete":"Delete event","cancel":"Cancel","save":"Save",
+      "task.title":"Daily Tasks","task.count":"Number of daily tasks","task.notePh":"Write a note for this month...",
+      "task.one":"{n} daily task","task.many":"{n} daily tasks",
+      "task.hasNote":"Has a note — click to open the daily view","task.edit":"Click to open the daily view",
+      "plan.edit":"Edit Plan","plan.name":"Plan name","plan.namePh":"e.g. Driving lessons","plan.notePh":"Add a note for this plan...",
+      "plan.delete":"Delete plan","plan.empty":"No plans yet. Add one using the field above.",
+      "plan.hasInfo":"Has a note/amount — double-click to view or edit","plan.noInfo":"Double-click to add a note or amount",
+      "rc.income":"Income","rc.expense":"Expenses","rc.net":"Net","rc.empty":"No events with an amount in {year}.",
+      "rc.month":"Month","rc.event":"Event","rc.in":"In","rc.out":"Out","rc.balance":"Balance",
+      "ev.conflict":"Overlaps another event this month — drag this card to another slot or month to fix",
+      "ev.perMonthTitle":"/month. ","ev.perMonthShort":"/mo","ev.notePrefix":"Note: ","ev.hint":"Drag to move, click to edit",
+      "more.n":"+{n} more","more.collapse":"▴ Collapse","more.hide":"Hide extra events","more.show":"Show more events",
+      "month.addTitle":"Click to add an event this month",
+      "banner.one":"{n} event overlaps and doesn't fit in the same row. Cards outlined in red — drag them to another slot or month to fix.",
+      "banner.many":"{n} events overlap and don't fit in the same row. Cards outlined in red — drag them to another slot or month to fix.",
+      "set.title":"Settings","done":"Done","ev.markDone":"Mark as done","ev.markUndone":"Mark as not done","set.completed":"Completed cards","set.show":"Show","set.hide":"Hide","set.sample":"Sample data","set.sampleHint":"Deletes ALL your current cards and plans (every year) and replaces them with examples that show every feature. Your settings are kept.","set.sampleAdd":"Delete all & load samples","set.sampleConfirm":"Click again to delete everything","set.money":"Currency and number format","set.currency":"Currency","set.numFormat":"Number format",
+      "set.decimals":"Decimals","dec.0":"Whole numbers","dec.2":"2 places","set.preview":"Preview","cur.none":"No symbol",
+      "set.language":"Language","set.appearance":"Appearance","set.theme":"Theme","theme.light":"Light","theme.dark":"Dark","theme.system":"System",
+      "set.accent":"Accent color","set.accentMain":"Main","set.accentMoney":"Money","set.density":"Density",
+      "density.comfortable":"Comfortable","density.compact":"Compact","set.reset":"Reset to defaults","set.done":"Done",
+      "ac.blue":"Blue","ac.indigo":"Indigo","ac.purple":"Purple","ac.rose":"Rose","ac.orange":"Orange","ac.teal":"Teal","ac.green":"Green","ac.graphite":"Graphite",
+      "drive.connect":"Connect Google Drive","drive.connecting":"Connecting…","drive.saving":"Saving…","drive.synced":"Synced to Drive","drive.error":"Sync error — click to retry","drive.reconnect":"Reconnect Drive","drive.setup":"Drive sync not set up"
+    },
+    id:{
+      "plans":"Rencana","day.back":"‹ Tahun","day.addTitle":"Klik untuk menambah acara di tanggal ini","day.notes":"Catatan bulanan","day.notesPh":"Tulis catatan untuk bulan ini...","day.count":"Rencana bulan","event.startDay":"Tanggal mulai (opsional)","event.endDay":"Tanggal selesai (opsional)","plan.placeholder":"Tambah rencana baru...","plan.add":"Tambah rencana","hint":"Seret rencana ke kalender untuk menambah acara baru.",
+      "settings":"Pengaturan","today":"Hari ini","event.addBtn":"+ Tambah acara","summary":"Ringkasan","close":"Tutup",
+      "event.add":"Tambah acara","event.edit":"Ubah acara","event.title":"Nama acara","event.titlePh":"mis. Rapat tahunan",
+      "event.start":"Bulan mulai","event.month":"Bulan","event.end":"Bulan selesai","color":"Warna","amount":"Nominal",
+      "amountPh":"mis. 1500000, -500000, atau @-2000 (bulanan)","amountPhDec":"mis. 1500{d}50, -500{d}25, atau @-20{d}5 (bulanan)",
+      "planAmountPh":"mis. 1500000 atau -500000","planAmountPhDec":"mis. 1500{d}50 atau -500{d}25",
+      "note":"Catatan","event.notePh":"Tambahkan catatan untuk acara ini...","event.delete":"Hapus acara","cancel":"Batal","save":"Simpan",
+      "task.title":"Tugas harian","task.count":"Jumlah tugas harian","task.notePh":"Tulis catatan untuk bulan ini...",
+      "task.one":"{n} tugas harian","task.many":"{n} tugas harian",
+      "task.hasNote":"Ada catatan — klik untuk membuka tampilan harian","task.edit":"Klik untuk membuka tampilan harian",
+      "plan.edit":"Ubah rencana","plan.name":"Nama rencana","plan.namePh":"mis. Kursus mengemudi","plan.notePh":"Tambahkan catatan untuk rencana ini...",
+      "plan.delete":"Hapus rencana","plan.empty":"Belum ada rencana. Tambahkan lewat kolom di atas.",
+      "plan.hasInfo":"Ada catatan/nominal — klik dua kali untuk melihat atau mengubah","plan.noInfo":"Klik dua kali untuk menambah catatan atau nominal",
+      "rc.income":"Pemasukan","rc.expense":"Pengeluaran","rc.net":"Bersih","rc.empty":"Tidak ada acara bernominal di {year}.",
+      "rc.month":"Bulan","rc.event":"Acara","rc.in":"Masuk","rc.out":"Keluar","rc.balance":"Saldo",
+      "ev.conflict":"Bertumpuk dengan acara lain di bulan ini — seret kartu ini ke slot atau bulan lain untuk memperbaikinya",
+      "ev.perMonthTitle":"/bulan. ","ev.perMonthShort":"/bln","ev.notePrefix":"Catatan: ","ev.hint":"Seret untuk memindahkan, klik untuk mengubah",
+      "more.n":"+{n} lainnya","more.collapse":"▴ Ciutkan","more.hide":"Sembunyikan acara tambahan","more.show":"Tampilkan acara lainnya",
+      "month.addTitle":"Klik untuk menambah acara di bulan ini",
+      "banner.one":"{n} acara bertumpuk dan tidak muat di baris yang sama. Kartu diberi garis merah — seret ke slot atau bulan lain untuk memperbaikinya.",
+      "banner.many":"{n} acara bertumpuk dan tidak muat di baris yang sama. Kartu diberi garis merah — seret ke slot atau bulan lain untuk memperbaikinya.",
+      "set.title":"Pengaturan","done":"Selesai","ev.markDone":"Tandai selesai","ev.markUndone":"Batalkan selesai","set.completed":"Card yang selesai","set.show":"Tampilkan","set.hide":"Sembunyikan","set.sample":"Data contoh","set.sampleHint":"MENGHAPUS SEMUA card dan rencana kamu (semua tahun) lalu menggantinya dengan contoh yang menunjukkan semua fitur. Pengaturan tetap tersimpan.","set.sampleAdd":"Hapus semua & muat contoh","set.sampleConfirm":"Klik lagi untuk menghapus semua","set.money":"Mata uang dan format angka","set.currency":"Mata uang","set.numFormat":"Format angka",
+      "set.decimals":"Desimal","dec.0":"Bilangan bulat","dec.2":"2 angka","set.preview":"Pratinjau","cur.none":"Tanpa simbol",
+      "set.language":"Bahasa","set.appearance":"Tampilan","set.theme":"Tema","theme.light":"Terang","theme.dark":"Gelap","theme.system":"Sistem",
+      "set.accent":"Warna aksen","set.accentMain":"Utama","set.accentMoney":"Keuangan","set.density":"Kerapatan",
+      "density.comfortable":"Nyaman","density.compact":"Rapat","set.reset":"Kembalikan ke bawaan","set.done":"Selesai",
+      "ac.blue":"Biru","ac.indigo":"Nila","ac.purple":"Ungu","ac.rose":"Mawar","ac.orange":"Oranye","ac.teal":"Tosca","ac.green":"Hijau","ac.graphite":"Grafit",
+      "drive.connect":"Hubungkan Google Drive","drive.connecting":"Menghubungkan…","drive.saving":"Menyimpan…","drive.synced":"Tersinkron ke Drive","drive.error":"Gagal sinkron — klik untuk coba lagi","drive.reconnect":"Sambungkan ulang Drive","drive.setup":"Sinkron Drive belum disetel"
+    }
+  };
+
+  let S = Object.assign({}, DEFAULT_SETTINGS);      // current settings (bound to the store below)
+  let MONTHS = MONTH_NAMES.en;
+  let dayMonth = null;   // null = year view, 1..12 = daily view of that month
+
+  function t(key, vars){
+    let str = (I18N[S.lang] && I18N[S.lang][key]);
+    if(str == null) str = I18N.en[key];
+    if(str == null) str = key;
+    if(vars) for(const k in vars) str = str.split("{"+k+"}").join(vars[k]);
+    return str;
+  }
+
+  function normalizeSettings(o){
+    const r = Object.assign({}, DEFAULT_SETTINGS, o || {});
+    if(!I18N[r.lang]) r.lang = DEFAULT_SETTINGS.lang;
+    if(!CURRENCIES[r.currency]) r.currency = DEFAULT_SETTINGS.currency;
+    if(!NUMFMTS[r.numFormat]) r.numFormat = DEFAULT_SETTINGS.numFormat;
+    r.decimals = (Number(r.decimals) === 2) ? 2 : 0;
+    if(["light","dark","system"].indexOf(r.theme) < 0) r.theme = DEFAULT_SETTINGS.theme;
+    if(!ACCENTS[r.accent]) r.accent = DEFAULT_SETTINGS.accent;
+    if(!MONEY_ACCENTS[r.moneyAccent]) r.moneyAccent = DEFAULT_SETTINGS.moneyAccent;
+    if(["comfortable","compact"].indexOf(r.density) < 0) r.density = DEFAULT_SETTINGS.density;
+    r.hideDone = !!r.hideDone;
+    return r;
+  }
+  const CHECK_ICON = '<svg class="ev-check" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>';
+  const COLORS = ["tomato","flamingo","tangerine","banana","sage","basil","peacock","blueberry","lavender","grape","graphite"];
+  const STORAGE_KEY = "planner_data_v1";
+
+  // ============================================================
+  // GOOGLE DRIVE SYNC — CONFIGURATION
+  // Ganti nilai di bawah ini dengan OAuth Client ID kamu sendiri
+  // dari Google Cloud Console (APIs & Services > Credentials >
+  // Create Credentials > OAuth client ID > Web application).
+  // ============================================================
+  const DRIVE_CLIENT_ID = "GANTI_DENGAN_CLIENT_ID_KAMU.apps.googleusercontent.com";
+  const DRIVE_SCOPE = "https://www.googleapis.com/auth/drive.appdata";
+  const DRIVE_FILE_NAME = "planner_data_v1.json";
+  const DRIVE_CONNECTED_KEY = "planner_drive_connected_v1";
+  let driveTokenClient = null;
+  let driveAccessToken = null;
+  let driveFileId = null;
+  let driveSyncTimer = null;
+  let driveState = "idle"; // idle | setup | connecting | saving | synced | error | reconnect
+
+  const now = new Date();
+  const REAL_YEAR = now.getFullYear();
+  const REAL_MONTH = now.getMonth()+1;
+
+  function defaultYearData(){
+    return { tasks:{1:1,2:1,3:1,4:1,5:0,6:1,7:1,8:1,9:5,10:1,11:4,12:1}, events:[], taskNotes:{} };
+  }
+
+  // ---------- sample data: one of everything the planner can do ----------
+  // yearly cards: plain, note, income/expense, recurring "@", multi-month, same-colour repeats
+  // (alternating shade), and a crowded month that triggers the "+N more" chip.
+  // daily cards: single day, multi-day (resizable), overlapping (side by side), amount, note.
+  // plans: plain, note badge, amount badge, note + amount badges (yearly list and daily list).
+  function buildSample(year, dm, lang){
+    const L = (a)=> a[lang === "id" ? 1 : 0];
+    const n = daysInMonth(year, dm);
+    const events = [], plans = [];
+    const Y = (t, color, sm, em, extra)=> events.push(Object.assign({ title:L(t), color, startMonth:sm, endMonth:em, scope:"year" }, extra || {}));
+    const D = (t, color, sd, ed, extra)=> events.push(Object.assign({ title:L(t), color, startMonth:dm, endMonth:dm, startDay:Math.min(sd, n), endDay:Math.min(ed, n), scope:"day" }, extra || {}));
+    const P = (t, color, scope, extra)=> plans.push(Object.assign({ name:L(t), color, scope }, extra || {}));
+
+    // yearly cards
+    Y(["Salary","Gaji"], "basil", 1, 6, { amount:15000000, recurring:true, note:L(["Recurring income: @ = every month","Pemasukan berulang: @ = tiap bulan"]) });
+    Y(["Installment","Cicilan"], "graphite", 2, 7, { amount:-2500000, recurring:true, note:L(["Recurring expense","Pengeluaran berulang"]) });
+    Y(["Kick-off","Kick-off"], "peacock", 1, 1, { done:true, note:L(["Marked Done: faded, struck through, with a check","Ditandai Selesai: pudar, dicoret, dan bercentang"]) });
+    Y(["Monthly focus","Fokus bulanan"], "blueberry", dm, dm, { note:L(["The Month plan counter in the daily view counts yearly cards like this one","Penghitung Month plan di tampilan harian menghitung card tahunan seperti ini"]) });
+    Y(["Product launch","Peluncuran produk"], "tomato", 3, 4, { note:L(["Multi-month card: drag its top or bottom edge","Card multi-bulan: tarik tepi atas atau bawahnya"]) });
+    Y(["Bonus","Bonus"], "sage", 6, 6, { amount:5000000 });
+    Y(["Vacation","Liburan"], "tangerine", 7, 7, { amount:-8000000, note:L(["One-off expense","Pengeluaran sekali"]) });
+    Y(["Class A","Kelas A"], "lavender", 8, 8);
+    Y(["Class B","Kelas B"], "lavender", 8, 8, { note:L(["Same colour repeats get alternating shades","Warna sama otomatis diberi gradasi selang-seling"]) });
+    Y(["Class C","Kelas C"], "lavender", 8, 8);
+    ["flamingo","banana","blueberry","grape","tomato","sage","peacock","tangerine"].forEach((c, i)=>{
+      Y(["Task " + (i + 1), "Tugas " + (i + 1)], c, 10, 10, i === 0 ? { note:L(["More than fit in a row: the rest go into the +N more chip","Lebih dari yang muat: sisanya masuk ke chip +N lainnya"]) } : null);
+    });
+
+    // daily cards (in month dm)
+    D(["Team meeting","Rapat tim"], "peacock", 3, 3, { done:true, note:L(["Single-day card, already done","Card satu hari, sudah selesai"]) });
+    D(["Sprint","Sprint"], "sage", 5, 9, { note:L(["Multi-day card: drag its bottom edge to resize","Card multi-hari: tarik tepi bawahnya untuk mengubah ukuran"]) });
+    D(["Review","Review"], "grape", 7, 8, { note:L(["Overlapping days sit side by side","Hari yang bersamaan ditaruh berdampingan"]) });
+    D(["Pay electricity","Bayar listrik"], "tomato", 12, 12, { amount:-450000, done:true });
+    D(["Payday","Gajian"], "basil", 25, 25, { amount:15000000 });
+    D(["Deadline","Tenggat"], "banana", 28, 30, { note:L(["Ends on the last day of the month","Berakhir di akhir bulan"]) });
+
+    // plans: yearly list
+    P(["Driving lessons","Kursus mengemudi"], "sage", "year");
+    P(["Annual bonus","Bonus tahunan"], "peacock", "year", { amount:5000000 });
+    P(["Renovate kitchen","Renovasi dapur"], "tangerine", "year", { note:L(["Has a note: one badge","Punya catatan: satu lencana"]) });
+    P(["Trip to Europe","Liburan ke Eropa"], "grape", "year", { amount:-25000000, note:L(["Has a note and an amount: two badges","Punya catatan dan nominal: dua lencana"]) });
+    // plans: daily list
+    P(["Morning workout","Olahraga pagi"], "sage", "day");
+    P(["Weekly groceries","Belanja mingguan"], "banana", "day", { amount:-300000 });
+    P(["Call family","Telepon keluarga"], "lavender", "day", { note:L(["Drag a plan onto a day to make a card","Seret rencana ke tanggal untuk membuat card"]) });
+    return { events, plans };
+  }
+  function sampleDayMonth(year){ return year === REAL_YEAR ? REAL_MONTH : 1; }
+
+  function seedYear2026(){
+    const d = defaultYearData();
+    d.events = buildSample(2026, sampleDayMonth(2026), S.lang).events.map((e, i)=> Object.assign(e, { id:"e" + (i + 1) }));
+    return d;
+  }
+
+  function defaultPlans(){
+    return buildSample(2026, sampleDayMonth(2026), S.lang).plans.map((p, i)=> Object.assign(p, { id:"p" + (i + 1) }));
+  }
+
+  const COLOR_HEX = {
+    tomato:"#d50000", flamingo:"#e67c73", tangerine:"#f4511e", banana:"#f6bf26",
+    sage:"#33b679", basil:"#0b8043", peacock:"#039be5", blueberry:"#3f51b5",
+    lavender:"#7986cb", grape:"#8e24aa", graphite:"#616161"
+  };
+  function darkenHex(hex, percent){
+    const num = parseInt(hex.replace("#",""), 16);
+    let r = (num >> 16) & 255, g = (num >> 8) & 255, b = num & 255;
+    r = Math.max(0, Math.round(r * (1 - percent)));
+    g = Math.max(0, Math.round(g * (1 - percent)));
+    b = Math.max(0, Math.round(b * (1 - percent)));
+    return "#" + [r,g,b].map(v=>v.toString(16).padStart(2,"0")).join("");
+  }
+
+  // Normalizes a raw parsed store object, whether it came from localStorage or from Drive.
+  function normalizeLoadedStore(s){
+    if(!s.plans) s.plans = defaultPlans();
+    s.plans.forEach(pl=>{ if(pl.scope !== "day" && pl.scope !== "year") pl.scope = "year"; });   // plans are per view
+    s.settings = normalizeSettings(s.settings);
+    // year/day cards are separate: cards saved before this split go to "day" if they had
+    // a day range, otherwise they stay as yearly (month-plan) cards
+    Object.keys(s.years || {}).forEach(k=>{
+      ((s.years[k] && s.years[k].events) || []).forEach(ev=>{
+        if(ev.scope !== "day" && ev.scope !== "year") ev.scope = (ev.startDay || ev.endDay) ? "day" : "year";
+        if(ev.scope === "day" && ev.endMonth > ev.startMonth){
+          ev.endMonth = ev.startMonth;
+          ev.endDay = daysInMonth(Number(k), ev.startMonth);
+        }
+      });
+    });
+    return s;
+  }
+  function loadStore(){
+    try{
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if(raw) return normalizeLoadedStore(JSON.parse(raw));
+    }catch(e){}
+    return { currentYear: 2026, years:{ "2026": seedYear2026() }, plans: defaultPlans(), settings: normalizeSettings() };
+  }
+  function saveStore(){
+    try{
+      store.updatedAt = Date.now();
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(store));
+      scheduleDriveUpload();
+    }catch(e){
+      console.error("Failed to save planner data:", e);
+    }
+  }
+
+  // ============================================================
+  // GOOGLE DRIVE SYNC — implementation
+  // Stores one JSON file (the same shape as `store`) in the user's
+  // hidden Drive "appDataFolder" (not visible in their normal My
+  // Drive), scoped to whichever Google account they connect with.
+  // ============================================================
+  function waitForGIS(cb, triesLeft){
+    triesLeft = (triesLeft == null) ? 150 : triesLeft;
+    if(window.google && google.accounts && google.accounts.oauth2){ cb(); return; }
+    if(triesLeft <= 0){ console.warn("Google Identity Services gagal dimuat (cek koneksi internet)."); return; }
+    setTimeout(()=> waitForGIS(cb, triesLeft - 1), 100);
+  }
+
+  function setDriveState(state){
+    driveState = state;
+    const el = document.getElementById("driveSyncBtn");
+    const label = document.getElementById("driveSyncLabel");
+    if(!el || !label) return;
+    el.setAttribute("data-state", state);
+    const map = {
+      idle: t("drive.connect"),
+      setup: t("drive.setup"),
+      connecting: t("drive.connecting"),
+      saving: t("drive.saving"),
+      synced: t("drive.synced"),
+      error: t("drive.error"),
+      reconnect: t("drive.reconnect")
+    };
+    label.textContent = map[state] || map.idle;
+    const xBtn = document.getElementById("driveDisconnectBtn");
+    if(xBtn) xBtn.style.display = (state === "synced" || state === "saving") ? "" : "none";
+  }
+
+  function initDrive(){
+    if(!DRIVE_CLIENT_ID || DRIVE_CLIENT_ID.indexOf("GANTI_") === 0){
+      setDriveState("setup");
+      return;
+    }
+    driveTokenClient = google.accounts.oauth2.initTokenClient({
+      client_id: DRIVE_CLIENT_ID,
+      scope: DRIVE_SCOPE,
+      callback: (resp)=>{
+        if(resp && resp.access_token){
+          driveAccessToken = resp.access_token;
+          try{ localStorage.setItem(DRIVE_CONNECTED_KEY, "1"); }catch(e){}
+          driveOnConnected();
+        } else {
+          setDriveState(localStorage.getItem(DRIVE_CONNECTED_KEY) === "1" ? "reconnect" : "idle");
+        }
+      },
+      error_callback: ()=>{
+        setDriveState(localStorage.getItem(DRIVE_CONNECTED_KEY) === "1" ? "reconnect" : "idle");
+      }
+    });
+    setDriveState("idle");
+    // previously connected in this browser -> try to reconnect silently (no popup)
+    if(localStorage.getItem(DRIVE_CONNECTED_KEY) === "1"){
+      setDriveState("connecting");
+      driveTokenClient.requestAccessToken({ prompt: "" });
+    }
+  }
+
+  async function driveFetch(url, opts, _retried){
+    opts = opts || {};
+    opts.headers = Object.assign({}, opts.headers, { "Authorization": "Bearer " + driveAccessToken });
+    const res = await fetch(url, opts);
+    if(res.status === 401 && !_retried){
+      await driveRefreshTokenSilent();
+      return driveFetch(url, opts, true);
+    }
+    if(!res.ok && res.status !== 404) throw new Error("Drive API error " + res.status);
+    return res;
+  }
+  function driveRefreshTokenSilent(){
+    return new Promise((resolve)=>{
+      if(!driveTokenClient){ resolve(); return; }
+      const prevCb = driveTokenClient.callback;
+      driveTokenClient.callback = (resp)=>{
+        if(resp && resp.access_token) driveAccessToken = resp.access_token;
+        driveTokenClient.callback = prevCb;
+        resolve();
+      };
+      driveTokenClient.requestAccessToken({ prompt: "" });
+    });
+  }
+
+  async function driveFindOrCreateFile(){
+    const q = encodeURIComponent("name='" + DRIVE_FILE_NAME + "' and trashed=false");
+    const res = await driveFetch("https://www.googleapis.com/drive/v3/files?spaces=appDataFolder&q=" + q + "&fields=files(id,modifiedTime)&pageSize=1");
+    const data = await res.json();
+    if(data.files && data.files.length) return { id: data.files[0].id, isNew:false };
+    const createRes = await driveFetch("https://www.googleapis.com/drive/v3/files", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: DRIVE_FILE_NAME, parents: ["appDataFolder"] })
+    });
+    const created = await createRes.json();
+    return { id: created.id, isNew:true };
+  }
+
+  async function driveDownload(fileId){
+    const res = await driveFetch("https://www.googleapis.com/drive/v3/files/" + fileId + "?alt=media");
+    const text = await res.text();
+    if(!text) return null;
+    try{ return JSON.parse(text); }catch(e){ return null; }
+  }
+
+  async function driveUploadNow(){
+    if(!driveAccessToken || !driveFileId) return;
+    setDriveState("saving");
+    store.updatedAt = store.updatedAt || Date.now();
+    await driveFetch("https://www.googleapis.com/upload/drive/v3/files/" + driveFileId + "?uploadType=media", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(store)
+    });
+    setDriveState("synced");
+  }
+
+  function scheduleDriveUpload(){
+    if(!driveAccessToken || !driveFileId) return;
+    clearTimeout(driveSyncTimer);
+    setDriveState("saving");
+    driveSyncTimer = setTimeout(()=>{
+      driveUploadNow().catch(err=>{ console.warn("Drive upload failed:", err); setDriveState("error"); });
+    }, 1200);
+  }
+
+  async function driveOnConnected(){
+    setDriveState("connecting");
+    try{
+      const f = await driveFindOrCreateFile();
+      driveFileId = f.id;
+      if(f.isNew){
+        await driveUploadNow();
+      } else {
+        const remote = await driveDownload(driveFileId);
+        if(remote && typeof remote === "object"){
+          const remoteTime = remote.updatedAt || 0;
+          const localTime = store.updatedAt || 0;
+          if(remoteTime > localTime){
+            store = normalizeLoadedStore(remote);
+            S = store.settings;
+            applyAll();
+            try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(store)); }catch(e){}
+          } else if(localTime > remoteTime){
+            await driveUploadNow();
+          }
+        } else {
+          await driveUploadNow();
+        }
+      }
+      setDriveState("synced");
+    }catch(err){
+      console.warn("Drive sync error:", err);
+      setDriveState("error");
+    }
+  }
+
+  let store = loadStore();
+  S = store.settings;
+  MONTHS = MONTH_NAMES[S.lang];
+  let editingId = null;
+  let modalScope = "year";
+  let planColorCursor = 0;
+
+  function getYearData(year){
+    if(!store.years[year]) store.years[year] = defaultYearData();
+    if(!store.years[year].taskNotes) store.years[year].taskNotes = {};
+    return store.years[year];
+  }
+
+  // ---------- populate month selects ----------
+  const fStart = document.getElementById("fStart");
+  const fEnd = document.getElementById("fEnd");
+  function buildMonthSelects(){
+    const a = fStart.value, b = fEnd.value;
+    [fStart, fEnd].forEach(sel=>{
+      sel.innerHTML = "";
+      MONTHS.forEach((m,i)=>{
+        const o = document.createElement("option"); o.value = i+1; o.textContent = m; sel.appendChild(o);
+      });
+    });
+    if(a) fStart.value = a;
+    if(b) fEnd.value = b;
+  }
+  buildMonthSelects();
+
+  // ---------- swatches ----------
+  const swatchesEl = document.getElementById("swatches");
+  let selectedColor = "sage";
+  COLORS.forEach(c=>{
+    const b = document.createElement("button");
+    b.type="button"; b.className = "swatch-btn " + c;
+    b.dataset.color = c;
+    b.style.background = "var(--"+c+")";
+    b.addEventListener("click", ()=>{
+      selectedColor = c;
+      document.querySelectorAll(".swatch-btn").forEach(x=>x.classList.remove("selected"));
+      b.classList.add("selected");
+    });
+    swatchesEl.appendChild(b);
+  });
+
+  function setSelectedColor(c){
+    selectedColor = c;
+    document.querySelectorAll(".swatch-btn").forEach(x=>x.classList.toggle("selected", x.dataset.color===c));
+  }
+
+  // ---------- plan modal swatches (separate from agenda modal's) ----------
+  const pSwatchesEl = document.getElementById("pSwatches");
+  let selectedPlanColor = "sage";
+  COLORS.forEach(c=>{
+    const b = document.createElement("button");
+    b.type="button"; b.className = "swatch-btn " + c;
+    b.dataset.color = c;
+    b.style.background = "var(--"+c+")";
+    b.addEventListener("click", ()=>{
+      selectedPlanColor = c;
+      pSwatchesEl.querySelectorAll(".swatch-btn").forEach(x=>x.classList.remove("selected"));
+      b.classList.add("selected");
+    });
+    pSwatchesEl.appendChild(b);
+  });
+  function setSelectedPlanColor(c){
+    selectedPlanColor = c;
+    pSwatchesEl.querySelectorAll(".swatch-btn").forEach(x=>x.classList.toggle("selected", x.dataset.color===c));
+  }
+
+  // ---------- modal open/close ----------
+  const overlay = document.getElementById("overlay");
+  const modalTitle = document.getElementById("modalTitle");
+  const deleteBtn = document.getElementById("deleteBtn");
+
+  function openModal(prefill){
+    editingId = prefill && prefill.id ? prefill.id : null;
+    modalScope = (prefill && prefill.scope) || (dayMonth != null ? "day" : "year");
+    document.getElementById("dayFieldsRow").style.display = modalScope === "day" ? "" : "none";
+    document.getElementById("endMonthField").style.display = modalScope === "day" ? "none" : "";
+    document.getElementById("lblStartMonth").textContent = modalScope === "day" ? t("event.month") : t("event.start");
+    modalTitle.textContent = editingId ? t("event.edit") : t("event.add");
+    deleteBtn.style.display = editingId ? "inline-block" : "none";
+    document.getElementById("fTitle").value = prefill && prefill.title || "";
+    fStart.value = prefill && prefill.startMonth || (dayMonth || REAL_MONTH);
+    fEnd.value = prefill && prefill.endMonth || fStart.value;
+    document.getElementById("fStartDay").value = (prefill && prefill.startDay) || "";
+    document.getElementById("fEndDay").value = (prefill && prefill.endDay) || "";
+    document.getElementById("fNote").value = (prefill && prefill.note) || "";
+    document.getElementById("fDone").checked = !!(prefill && prefill.done);
+    document.getElementById("fAmount").value = (prefill && prefill.amount != null) ? ((prefill.recurring ? "@" : "") + amountToInput(prefill.amount)) : "";
+    setSelectedColor(prefill && prefill.color || "sage");
+    overlay.classList.add("open");
+    document.getElementById("fTitle").focus();
+  }
+  function closeModal(){ overlay.classList.remove("open"); }
+
+  document.getElementById("addBtn").addEventListener("click", ()=> openModal());
+  document.getElementById("cancelBtn").addEventListener("click", closeModal);
+  overlay.addEventListener("click", (e)=>{ if(e.target === overlay) closeModal(); });
+
+  document.getElementById("saveBtn").addEventListener("click", ()=>{
+    const title = document.getElementById("fTitle").value.trim();
+    if(!title){ document.getElementById("fTitle").focus(); return; }
+    let start = parseInt(fStart.value,10);
+    let end = parseInt(fEnd.value,10);
+    if(modalScope === "day") end = start;   // daily cards stay inside one month
+    if(end < start) end = start;
+    // optional day-of-month range
+    const yNow = store.currentYear;
+    let startDay = modalScope === "day" ? parseInt(document.getElementById("fStartDay").value, 10) : NaN;
+    let endDay = modalScope === "day" ? parseInt(document.getElementById("fEndDay").value, 10) : NaN;
+    startDay = isNaN(startDay) ? null : Math.min(Math.max(1, startDay), daysInMonth(yNow, start));
+    endDay = isNaN(endDay) ? null : Math.min(Math.max(1, endDay), daysInMonth(yNow, end));
+    if(start === end){
+      if(startDay && !endDay) endDay = startDay;
+      if(!startDay && endDay) startDay = 1;
+      if(startDay && endDay && endDay < startDay) endDay = startDay;
+    }
+    const note = document.getElementById("fNote").value.trim();
+    const amountInput = document.getElementById("fAmount").value.trim();
+    const isRecurring = amountInput.startsWith("@");
+    const amount = parseAmount(isRecurring ? amountInput.slice(1) : amountInput);
+    const recurring = amount != null && isRecurring;
+    const yd = getYearData(store.currentYear);
+    if(editingId){
+      const ev = yd.events.find(e=>e.id===editingId);
+      if(ev){ ev.title=title; ev.startMonth=start; ev.endMonth=end; ev.color=selectedColor; ev.note=note; ev.amount=amount; ev.recurring=recurring; ev.startDay=startDay; ev.endDay=endDay; ev.done=document.getElementById("fDone").checked; }
+    } else {
+      yd.events.push({ id:"e"+Date.now(), title, color:selectedColor, startMonth:start, endMonth:end, startDay, endDay, note, amount, recurring, scope:modalScope, done:document.getElementById("fDone").checked });
+    }
+    saveStore(); closeModal(); render();
+  });
+
+  deleteBtn.addEventListener("click", ()=>{
+    if(!editingId) return;
+    const yd = getYearData(store.currentYear);
+    yd.events = yd.events.filter(e=>e.id!==editingId);
+    saveStore(); closeModal(); render();
+  });
+
+  // ---------- year navigation ----------
+  const yearTitle = document.getElementById("yearTitle");
+  const backBtn = document.getElementById("backBtn");
+  function daysInMonth(y, m){ return new Date(y, m, 0).getDate(); }
+  function shiftMonth(delta){
+    let m = dayMonth + delta, y = store.currentYear;
+    if(m < 1){ m = 12; y--; } else if(m > 12){ m = 1; y++; }
+    dayMonth = m; store.currentYear = y; saveStore(); render();
+  }
+  function openDay(m){ dayMonth = m; window.scrollTo({top:0}); render(); }
+  function closeDay(){
+    const m = dayMonth; dayMonth = null; render();
+    setTimeout(()=>{
+      const row = document.querySelector('.row-line[data-row="'+m+'"]');
+      if(row) row.scrollIntoView({block:"center"});
+    }, 30);
+  }
+  backBtn.addEventListener("click", closeDay);
+  document.getElementById("prevYear").addEventListener("click", ()=>{ if(dayMonth != null){ shiftMonth(-1); return; } store.currentYear--; saveStore(); render(); });
+  document.getElementById("nextYear").addEventListener("click", ()=>{ if(dayMonth != null){ shiftMonth(1); return; } store.currentYear++; saveStore(); render(); });
+  // "Today": from the year view or the daily view, jump to today's date in the daily view
+  document.getElementById("todayBtn").addEventListener("click", ()=>{
+    const nowD = new Date();
+    const y = nowD.getFullYear(), m = nowD.getMonth() + 1, d = nowD.getDate();
+    store.currentYear = y; dayMonth = m; saveStore(); render();
+    setTimeout(()=>{
+      const row = document.querySelector('.grid.day .row-line[data-row="' + d + '"]');
+      if(!row) return;
+      row.scrollIntoView({behavior:"smooth", block:"center"});
+      row.classList.add("today");
+      setTimeout(()=>row.classList.remove("today"), 1600);
+    }, 30);
+  });
+
+  // ---------- add / remove plan ----------
+  // the sidebar shows a separate plan list for the yearly view and for the daily view
+  function curScope(){ return dayMonth != null ? "day" : "year"; }
+  const planInput = document.getElementById("planInput");
+  function addPlan(){
+    const name = planInput.value.trim();
+    if(!name) { planInput.focus(); return; }
+    const existing = store.plans.find(p => p.scope === curScope() && p.name.toLowerCase() === name.toLowerCase());
+    if(existing){
+      // already exists: don't create a duplicate, just point at the existing one
+      planInput.value = "";
+      renderPlanList();
+      const el = document.querySelector('.plan-item[data-plan-id="'+existing.id+'"]');
+      if(el){
+        el.classList.add('pulse');
+        el.addEventListener('animationend', ()=> el.classList.remove('pulse'), {once:true});
+        el.scrollIntoView({behavior:'smooth', block:'nearest'});
+      }
+      planInput.focus();
+      return;
+    }
+    const color = COLORS[planColorCursor % COLORS.length];
+    planColorCursor++;
+    store.plans.push({ id:"p"+Date.now(), name, color, scope:curScope() });
+    saveStore();
+    planInput.value = "";
+    render();
+    planInput.focus();
+  }
+  document.getElementById("planAddBtn").addEventListener("click", addPlan);
+  planInput.addEventListener("keydown", (e)=>{ if(e.key==="Enter") addPlan(); });
+
+  function removePlan(id){
+    store.plans = store.plans.filter(p=>p.id!==id);
+    saveStore(); render();
+  }
+
+  let draggedPlanId = null;
+  let expandedRows = new Set();
+  let openAnimRow = null; // month whose strip should animate open on the next render
+  const reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  function renderPlanList(){
+    const list = document.getElementById("planList");
+    list.innerHTML = "";
+    const visiblePlans = store.plans.filter(p=> p.scope === curScope());
+    if(visiblePlans.length===0){
+      const empty = document.createElement("div");
+      empty.className = "empty-plans";
+      empty.textContent = t("plan.empty");
+      list.appendChild(empty);
+      return;
+    }
+    visiblePlans.forEach(p=>{
+      const item = document.createElement("div");
+      item.className = "plan-item";
+      item.dataset.color = p.color;
+      item.dataset.planId = p.id;
+      if(p.id === draggedPlanId) item.style.opacity = "0";
+
+      const sw = document.createElement("span");
+      sw.className = "swatch";
+      sw.style.background = "var(--"+p.color+")";
+      item.appendChild(sw);
+
+      const nm = document.createElement("span");
+      nm.className = "plan-name";
+      const hasNote = p.note && p.note.length > 0;
+      const hasAmount = p.amount != null;
+      nm.textContent = p.name;
+
+      const baseHex = COLOR_HEX[p.color] || "#33b679";
+      let darkenStep = 1;
+      if(hasNote){
+        const noteBadge = document.createElement("span");
+        noteBadge.className = "plan-badge";
+        noteBadge.style.background = darkenHex(baseHex, 0.15 * darkenStep);
+        item.appendChild(noteBadge);
+        darkenStep++;
+      }
+      if(hasAmount){
+        const amountBadge = document.createElement("span");
+        amountBadge.className = "plan-badge";
+        amountBadge.style.background = darkenHex(baseHex, 0.15 * darkenStep);
+        item.appendChild(amountBadge);
+        darkenStep++;
+      }
+
+      item.appendChild(nm);
+      item.title = (hasNote || hasAmount) ? t("plan.hasInfo") : t("plan.noInfo");
+      
+
+      const del = document.createElement("span");
+      del.className = "plan-del";
+      del.textContent = "✕";
+      del.title = t("plan.delete");
+      del.addEventListener("pointerdown", (e)=> e.stopPropagation());
+      del.addEventListener("click", (e)=>{ e.stopPropagation(); removePlan(p.id); });
+      item.appendChild(del);
+
+      attachPlanDrag(item, p);
+      list.appendChild(item);
+    });
+  }
+
+  // ---------- plan modal (note + nominal) ----------
+  const planOverlay = document.getElementById("planOverlay");
+  const pName = document.getElementById("pName");
+  const pAmount = document.getElementById("pAmount");
+  const pNote = document.getElementById("pNote");
+  let editingPlanId = null;
+
+  function openPlanModal(p){
+    editingPlanId = p.id;
+    pName.value = p.name;
+    pAmount.value = p.amount != null ? amountToInput(p.amount) : "";
+    pNote.value = p.note || "";
+    setSelectedPlanColor(p.color);
+    planOverlay.classList.add("open");
+    pName.focus();
+  }
+  function closePlanModal(){ planOverlay.classList.remove("open"); editingPlanId = null; }
+
+  document.getElementById("pCancelBtn").addEventListener("click", closePlanModal);
+  planOverlay.addEventListener("click", (e)=>{ if(e.target === planOverlay) closePlanModal(); });
+
+  document.getElementById("pSaveBtn").addEventListener("click", ()=>{
+    if(!editingPlanId) return;
+    const p = store.plans.find(x=>x.id===editingPlanId);
+    if(!p) return;
+    const name = pName.value.trim();
+    if(!name){ pName.focus(); return; }
+    const amount = parseAmount(pAmount.value);
+    p.name = name;
+    p.color = selectedPlanColor;
+    p.amount = amount;
+    p.note = pNote.value.trim();
+    saveStore();
+    closePlanModal();
+    renderPlanList();
+  });
+
+  document.getElementById("pDeleteBtn").addEventListener("click", ()=>{
+    if(!editingPlanId) return;
+    removePlan(editingPlanId);
+    closePlanModal();
+  });
+
+  function attachPlanDrag(item, plan){
+    item.addEventListener('pointerdown', function(downEvt){
+      if(downEvt.button !== 0) return;
+      const startX = downEvt.clientX, startY = downEvt.clientY;
+      let dragging = false;
+      let ghost = null;
+      let dropIndicator = null;
+      let pendingTargetId = undefined; // id of the plan this item will be inserted BEFORE; undefined = no change, null = insert at end
+
+      const holdTimer = setTimeout(()=>{
+        item.classList.add('holding');
+      }, 350);
+
+      function insideGrid(x,y){
+        const r = document.getElementById('grid').getBoundingClientRect();
+        return x>=r.left && x<=r.right && y>=r.top && y<=r.bottom;
+      }
+      function insidePlanList(x,y){
+        const r = document.getElementById('planList').getBoundingClientRect();
+        return x>=r.left && x<=r.right && y>=r.top && y<=r.bottom;
+      }
+
+      function showIndicatorAt(y){
+        const list = document.getElementById('planList');
+        const others = Array.from(list.querySelectorAll('.plan-item')).filter(el => el.dataset.planId !== plan.id);
+        if(!dropIndicator){
+          dropIndicator = document.createElement('div');
+          dropIndicator.className = 'drop-indicator';
+          dropIndicator.style.background = 'var(--' + plan.color + ')';
+        }
+        if(others.length === 0){
+          pendingTargetId = null;
+          list.appendChild(dropIndicator);
+          return;
+        }
+        for(const el of others){
+          const rect = el.getBoundingClientRect();
+          if(y < rect.top + rect.height/2){
+            pendingTargetId = el.dataset.planId;
+            list.insertBefore(dropIndicator, el);
+            return;
+          }
+        }
+        // below every item -> insert at the very end
+        pendingTargetId = null;
+        list.appendChild(dropIndicator);
+      }
+
+      function onMove(moveEvt){
+        const dx = moveEvt.clientX - startX, dy = moveEvt.clientY - startY;
+        if(!dragging && (Math.abs(dx) > 6 || Math.abs(dy) > 6)){
+          dragging = true;
+          clearTimeout(holdTimer);
+          item.classList.remove('holding');
+          ghost = document.createElement('div');
+          ghost.className = 'plan-ghost ' + plan.color;
+          ghost.textContent = plan.name;
+          document.body.appendChild(ghost);
+          draggedPlanId = plan.id;
+          renderPlanList();
+        }
+        if(!dragging) return;
+
+        ghost.style.left = moveEvt.clientX + 'px';
+        ghost.style.top = moveEvt.clientY + 'px';
+
+        document.querySelectorAll('.row-line.drop-target').forEach(r=>r.classList.remove('drop-target'));
+        if(insidePlanList(moveEvt.clientX, moveEvt.clientY)){
+          showIndicatorAt(moveEvt.clientY);
+        } else {
+          if(dropIndicator && dropIndicator.parentNode){
+            dropIndicator.remove();
+            pendingTargetId = undefined;
+          }
+          if(insideGrid(moveEvt.clientX, moveEvt.clientY)){
+            const rowEl = findRowAtY(moveEvt.clientY);
+            if(rowEl) rowEl.classList.add('drop-target');
+          }
+        }
+      }
+
+      function onUp(upEvt){
+        document.removeEventListener('pointermove', onMove);
+        document.removeEventListener('pointerup', onUp);
+        document.querySelectorAll('.row-line.drop-target').forEach(r=>r.classList.remove('drop-target'));
+        if(ghost) ghost.remove();
+        if(dropIndicator && dropIndicator.parentNode) dropIndicator.remove();
+        clearTimeout(holdTimer);
+        item.classList.remove('holding');
+        draggedPlanId = null;
+
+        if(!dragging){
+          openPlanModal(plan);
+          return;
+        }
+
+        if(insideGrid(upEvt.clientX, upEvt.clientY)){
+          const rowEl = findRowAtY(upEvt.clientY);
+          const slotIdx = findSlotAtX(upEvt.clientX);
+          if(rowEl){
+            let row = parseInt(rowEl.dataset.row, 10);
+            let dropDay = null;
+            if(dayMonth != null){ dropDay = row; row = dayMonth; }
+            const yd = getYearData(store.currentYear);
+            const newEvent = { id:"e"+Date.now(), title:plan.name, color:plan.color, startMonth:row, endMonth:row, note:plan.note||"", amount:plan.amount!=null?plan.amount:null, scope:(dayMonth != null ? "day" : "year") };
+            if(dropDay != null){ newEvent.startDay = dropDay; newEvent.endDay = dropDay; }
+            else if(slotIdx !== null) newEvent.preferredSlot = slotIdx;
+            yd.events.push(newEvent);
+            // consumed: remove this plan from the sidebar list now that it's on the calendar
+            store.plans = store.plans.filter(p => p.id !== plan.id);
+            saveStore();
+          }
+          render();
+          return;
+        }
+
+        // apply the reorder exactly once, based on where the indicator was last shown
+        if(pendingTargetId !== undefined){
+          const fromIdx = store.plans.findIndex(p => p.id === plan.id);
+          if(fromIdx !== -1){
+            store.plans.splice(fromIdx, 1);
+            if(pendingTargetId === null){
+              store.plans.push(plan);
+            } else {
+              const targetIdx = store.plans.findIndex(p => p.id === pendingTargetId);
+              store.plans.splice(targetIdx === -1 ? store.plans.length : targetIdx, 0, plan);
+            }
+            saveStore();
+          }
+        }
+        renderPlanList();
+      }
+
+      document.addEventListener('pointermove', onMove);
+      document.addEventListener('pointerup', onUp);
+    });
+  }
+
+  // ---------- task chip editing (count + note) ----------
+  const taskOverlay = document.getElementById("taskOverlay");
+  const taskModalTitle = document.getElementById("taskModalTitle");
+  const tCount = document.getElementById("tCount");
+  const tNote = document.getElementById("tNote");
+  let editingTaskMonth = null;
+
+  function editTaskCount(month){
+    const yd = getYearData(store.currentYear);
+    editingTaskMonth = month;
+    taskModalTitle.textContent = t("task.title") + " — " + MONTHS[month-1];
+    tCount.value = yd.tasks[month] ?? 1;
+    tNote.value = (yd.taskNotes && yd.taskNotes[month]) || "";
+    taskOverlay.classList.add("open");
+    tCount.focus();
+  }
+  function closeTaskModal(){ taskOverlay.classList.remove("open"); editingTaskMonth = null; }
+
+  document.getElementById("tCancelBtn").addEventListener("click", closeTaskModal);
+  taskOverlay.addEventListener("click", (e)=>{ if(e.target === taskOverlay) closeTaskModal(); });
+  document.getElementById("tSaveBtn").addEventListener("click", ()=>{
+    if(editingTaskMonth == null) return;
+    const yd = getYearData(store.currentYear);
+    const n = parseInt(tCount.value, 10);
+    yd.tasks[editingTaskMonth] = isNaN(n) || n < 0 ? 0 : n;
+    if(!yd.taskNotes) yd.taskNotes = {};
+    yd.taskNotes[editingTaskMonth] = tNote.value.trim();
+    saveStore();
+    closeTaskModal();
+    render();
+  });
+
+  // ---------- recap right sidebar ----------
+  const recapSide = document.getElementById("recapSide");
+  const recapBtn = document.getElementById("recapBtn");
+  const recapYearEl = document.getElementById("recapYear");
+  const recapContentEl = document.getElementById("recapContent");
+  let recapOpen = false;
+
+  function renderRecap(){
+    const yd = getYearData(store.currentYear);
+    recapYearEl.textContent = store.currentYear;
+
+    // explode into one row per occurrence: recurring ("@") items get one row
+    // per month across their span, one-off amounts get a single row at their last month
+    const rows = [];
+    yd.events.forEach(ev=>{
+      if(ev.amount == null) return;
+      if(ev.recurring){
+        for(let m=ev.startMonth; m<=ev.endMonth; m++){
+          rows.push({ month:m, title:ev.title, color:ev.color, amount:ev.amount, id:ev.id, recurring:true, done:!!ev.done });
+        }
+      } else {
+        const isMultiMonth = ev.endMonth > ev.startMonth;
+        rows.push({ month:ev.endMonth, title:ev.title, color:ev.color, amount:ev.amount, id:ev.id, recurring:false, lastMonth:isMultiMonth, done:!!ev.done });
+      }
+    });
+
+    // sort by month, income before expense within the same month
+    rows.sort((a,b)=>{
+      if(a.month !== b.month) return a.month - b.month;
+      const aIn = a.amount >= 0 ? 0 : 1, bIn = b.amount >= 0 ? 0 : 1;
+      return aIn - bIn;
+    });
+
+    let income = 0, expense = 0;
+    rows.forEach(r=>{ if(r.amount >= 0) income += r.amount; else expense += r.amount; });
+    const net = income + expense;
+
+    // keep scroll position across live refreshes
+    const oldWrap = recapContentEl.querySelector(".recap-table-wrap");
+    const prevScroll = oldWrap ? oldWrap.scrollTop : 0;
+
+    recapContentEl.innerHTML = "";
+
+    const summary = document.createElement("div");
+    summary.className = "recap-summary";
+    summary.innerHTML =
+      "<div class='recap-stat income'><div class='label'>" + t("rc.income") + "</div><div class='value'>" + formatMoney(income) + "</div></div>" +
+      "<div class='recap-stat expense'><div class='label'>" + t("rc.expense") + "</div><div class='value'>" + formatMoney(expense) + "</div></div>" +
+      "<div class='recap-stat net'><div class='label'>" + t("rc.net") + "</div><div class='value'>" + formatMoney(net) + "</div></div>";
+    recapContentEl.appendChild(summary);
+
+    if(rows.length === 0){
+      const empty = document.createElement("div");
+      empty.className = "recap-empty";
+      empty.textContent = t("rc.empty", {year: store.currentYear});
+      recapContentEl.appendChild(empty);
+      return;
+    }
+
+    const wrap = document.createElement("div");
+    wrap.className = "recap-table-wrap";
+    const thead = document.createElement("div");
+    thead.className = "recap-thead";
+    thead.innerHTML = "<span>" + t("rc.month") + "</span><span>" + t("rc.event") + "</span><span class='num'>" + t("rc.in") + "</span><span class='num'>" + t("rc.out") + "</span><span class='num'>" + t("rc.balance") + "</span>";
+    wrap.appendChild(thead);
+    let running = 0;
+    rows.forEach(r=>{
+      running += r.amount;
+      const row = document.createElement("div");
+      row.className = "recap-trow" + (r.done ? " done" : "");
+      row.innerHTML =
+        "<span class='rmonth'>" + MONTHS[r.month-1].slice(0,3) + "</span>" +
+        "<span class='rtitle'><span class='dot " + r.color + "'></span>" + (r.done ? CHECK_ICON : "") + escapeHtml(r.title) + "</span>" +
+        "<span class='rin'>" + (r.amount >= 0 ? formatMoney(r.amount) : "") + "</span>" +
+        "<span class='rout'>" + (r.amount < 0 ? formatMoney(r.amount) : "") + "</span>" +
+        "<span class='rsaldo'>" + formatMoney(running) + "</span>";
+      row.addEventListener("click", ()=>{
+        const ev = yd.events.find(e=>e.id===r.id);
+        if(ev) openModal(ev);
+      });
+      wrap.appendChild(row);
+    });
+    recapContentEl.appendChild(wrap);
+    wrap.scrollTop = prevScroll;
+  }
+  function setRecapOpen(open){
+    recapOpen = open;
+    recapSide.classList.toggle("open", open);
+    recapSide.setAttribute("aria-hidden", open ? "false" : "true");
+    recapBtn.classList.toggle("active", open);
+    if(open) renderRecap();
+  }
+  recapBtn.addEventListener("click", ()=> setRecapOpen(!recapOpen));
+  document.addEventListener("click", (e)=>{
+    if(!recapOpen) return;
+    if(!window.matchMedia("(max-width:1280px)").matches) return; // only when it overlays the page
+    if(recapSide.contains(e.target) || recapBtn.contains(e.target)) return;
+    if(e.target.closest(".overlay")) return; // clicks inside modals
+    setRecapOpen(false);
+  });
+  document.getElementById("recapCloseBtn").addEventListener("click", ()=> setRecapOpen(false));
+
+  // ---------- drag helpers ----------
+  function findRowAtY(y){
+    const rows = Array.from(document.querySelectorAll('.row-line'));
+    if(rows.length===0) return null;
+    for(const r of rows){
+      const rect = r.getBoundingClientRect();
+      if(y >= rect.top && y <= rect.bottom) return r;
+    }
+    // clamp to first/last if dropped above/below the grid
+    const first = rows[0].getBoundingClientRect();
+    const last = rows[rows.length-1].getBoundingClientRect();
+    if(y < first.top) return rows[0];
+    if(y > last.bottom) return rows[rows.length-1];
+    return null;
+  }
+
+  function findSlotAtX(x){
+    const grid = document.getElementById('grid');
+    const cs = getComputedStyle(grid);
+    const colWidths = cs.gridTemplateColumns.split(' ').map(v=>parseFloat(v));
+    const gap = parseFloat(cs.columnGap) || 0;
+    const gridLeft = grid.getBoundingClientRect().left;
+    let cursor = gridLeft - grid.scrollLeft;
+    const slotBounds = [];
+    for(let i=0;i<colWidths.length;i++){
+      const left = cursor;
+      const right = cursor + colWidths[i];
+      if(i>=2) slotBounds.push([left,right]); // event slot columns are index 2..5
+      cursor = right + gap;
+    }
+    for(let i=0;i<slotBounds.length;i++){
+      if(x >= slotBounds[i][0] && x <= slotBounds[i][1]) return i;
+    }
+    if(x < slotBounds[0][0]) return 0;
+    if(x > slotBounds[slotBounds.length-1][1]) return slotBounds.length-1;
+    return null;
+  }
+
+  function attachDrag(el, ev){
+    el.addEventListener('pointerdown', function(downEvt){
+      if(downEvt.button !== 0) return;
+      const startX = downEvt.clientX, startY = downEvt.clientY;
+      let dragging = false;
+      let ghost = null;
+      let dropIndicator = null;
+      let pendingTargetId = undefined; // id of the plan this new plan will be inserted BEFORE; undefined = not over the list, null = insert at end
+
+      const holdTimer = setTimeout(()=>{
+        el.classList.add('holding');
+      }, 350);
+
+      function insideSidebar(x,y){
+        const r = document.querySelector('.sidebar').getBoundingClientRect();
+        return x>=r.left && x<=r.right && y>=r.top && y<=r.bottom;
+      }
+      function insideGrid(x,y){
+        const r = document.getElementById('grid').getBoundingClientRect();
+        return x>=r.left && x<=r.right && y>=r.top && y<=r.bottom;
+      }
+
+      function showIndicatorAt(y){
+        const list = document.getElementById('planList');
+        const others = Array.from(list.querySelectorAll('.plan-item'));
+        if(!dropIndicator){
+          dropIndicator = document.createElement('div');
+          dropIndicator.className = 'drop-indicator';
+          dropIndicator.style.background = 'var(--' + ev.color + ')';
+        }
+        if(others.length === 0){
+          pendingTargetId = null;
+          list.appendChild(dropIndicator);
+          return;
+        }
+        for(const item of others){
+          const rect = item.getBoundingClientRect();
+          if(y < rect.top + rect.height/2){
+            pendingTargetId = item.dataset.planId;
+            list.insertBefore(dropIndicator, item);
+            return;
+          }
+        }
+        pendingTargetId = null;
+        list.appendChild(dropIndicator);
+      }
+      function clearIndicator(){
+        if(dropIndicator && dropIndicator.parentNode) dropIndicator.remove();
+        pendingTargetId = undefined;
+      }
+
+      function onMove(moveEvt){
+        const dx = moveEvt.clientX - startX;
+        const dy = moveEvt.clientY - startY;
+        if(!dragging && (Math.abs(dx) > 6 || Math.abs(dy) > 6)){
+          dragging = true;
+          clearTimeout(holdTimer);
+          el.classList.remove('holding');
+          el.style.opacity = '0';
+          ghost = document.createElement('div');
+          ghost.className = 'event dragging plan-ghost-card ' + ev.color;
+          ghost.textContent = ev.title;
+          document.body.appendChild(ghost);
+        }
+        if(dragging && ghost){
+          ghost.style.left = moveEvt.clientX + 'px';
+          ghost.style.top = moveEvt.clientY + 'px';
+
+          const overSidebar = insideSidebar(moveEvt.clientX, moveEvt.clientY);
+          document.querySelector('.sidebar').classList.toggle('drag-over', overSidebar);
+
+          document.querySelectorAll('.row-line.drop-target').forEach(r=>r.classList.remove('drop-target'));
+          if(overSidebar){
+            showIndicatorAt(moveEvt.clientY);
+          } else {
+            clearIndicator();
+            if(insideGrid(moveEvt.clientX, moveEvt.clientY)){
+              const rowEl = findRowAtY(moveEvt.clientY);
+              if(rowEl) rowEl.classList.add('drop-target');
+            }
+          }
+        }
+      }
+
+      function onUp(upEvt){
+        document.removeEventListener('pointermove', onMove);
+        document.removeEventListener('pointerup', onUp);
+        document.querySelectorAll('.row-line.drop-target').forEach(r=>r.classList.remove('drop-target'));
+        document.querySelector('.sidebar').classList.remove('drag-over');
+        if(dropIndicator && dropIndicator.parentNode) dropIndicator.remove();
+        if(ghost) ghost.remove();
+        clearTimeout(holdTimer);
+        el.classList.remove('holding');
+        el.style.opacity = '';
+
+        if(!dragging){
+          openModal(ev);
+          return;
+        }
+
+        const yd = getYearData(store.currentYear);
+
+        if(insideSidebar(upEvt.clientX, upEvt.clientY)){
+          // dropped into the sidebar: turn this card into a saved plan, remove it from the calendar,
+          // inserted exactly where the drop-indicator line last showed.
+          const existingPlan = store.plans.find(p => p.scope === curScope() && p.name.toLowerCase() === ev.title.toLowerCase());
+          if(!existingPlan){
+            const newPlan = { id:"p"+Date.now(), name:ev.title, color:ev.color, note:ev.note||"", amount:ev.amount!=null?ev.amount:null, scope:curScope() };
+            if(pendingTargetId){
+              const idx = store.plans.findIndex(p => p.id === pendingTargetId);
+              store.plans.splice(idx === -1 ? store.plans.length : idx, 0, newPlan);
+            } else {
+              store.plans.push(newPlan);
+            }
+          } else {
+            // plan already exists: keep it, but carry over the card's note/amount if it had any
+            if(ev.note) existingPlan.note = ev.note;
+            if(ev.amount != null) existingPlan.amount = ev.amount;
+          }
+          yd.events = yd.events.filter(e => e.id !== ev.id);
+          saveStore();
+          render();
+          return;
+        }
+
+        const originRowEl = findRowAtY(startY);
+        const targetRowEl = findRowAtY(upEvt.clientY);
+        const slotIdx = findSlotAtX(upEvt.clientX);
+
+        // dropped inside an open dropdown strip ("+N more"): reorder among
+        // that same month's hidden cards instead of assigning a grid slot.
+        const dropdownEl = document.querySelector('.row-scroll[data-row="' + (targetRowEl ? targetRowEl.dataset.row : '') + '"]');
+        if(dropdownEl){
+          const dropRect = dropdownEl.getBoundingClientRect();
+          const overDropdown = upEvt.clientX >= dropRect.left && upEvt.clientX <= dropRect.right
+            && upEvt.clientY >= dropRect.top && upEvt.clientY <= dropRect.bottom;
+          if(overDropdown){
+            const targetRow = parseInt(targetRowEl.dataset.row, 10);
+            const duration = ev.endMonth - ev.startMonth;
+            ev.startMonth = targetRow; ev.endMonth = targetRow + duration;
+
+            const siblings = Array.from(dropdownEl.querySelectorAll('.event')).filter(s => s.dataset.eventId !== ev.id);
+            let targetId = null;
+            for(const sib of siblings){
+              const r2 = sib.getBoundingClientRect();
+              if(upEvt.clientX < r2.left + r2.width/2){ targetId = sib.dataset.eventId; break; }
+            }
+            const fromIdx = yd.events.findIndex(e => e.id === ev.id);
+            yd.events.splice(fromIdx, 1);
+            if(targetId){
+              const toIdx = yd.events.findIndex(e => e.id === targetId);
+              yd.events.splice(toIdx === -1 ? yd.events.length : toIdx, 0, ev);
+            } else {
+              yd.events.push(ev);
+            }
+            saveStore();
+            render();
+            return;
+          }
+        }
+
+        if(originRowEl && targetRowEl){
+          const originRow = parseInt(originRowEl.dataset.row, 10);
+          const targetRow = parseInt(targetRowEl.dataset.row, 10);
+          const delta = targetRow - originRow;
+          const duration = ev.endMonth - ev.startMonth;
+          let newStart = ev.startMonth + delta;
+          newStart = Math.max(1, Math.min(12 - duration, newStart));
+          ev.startMonth = newStart;
+          ev.endMonth = newStart + duration;
+        }
+        if(slotIdx !== null){ ev.preferredSlot = slotIdx; }
+
+        saveStore();
+        render();
+      }
+
+      document.addEventListener('pointermove', onMove);
+      document.addEventListener('pointerup', onUp);
+    });
+  }
+
+  function attachResize(el, ev, edge){
+    const handle = document.createElement('div');
+    handle.className = 'resize-handle ' + edge;
+    el.appendChild(handle);
+
+    handle.addEventListener('pointerdown', function(downEvt){
+      if(downEvt.button !== 0) return;
+      downEvt.preventDefault();
+      downEvt.stopPropagation();
+      el.classList.add('resizing');
+
+      function onMove(moveEvt){
+        const rowEl = findRowAtY(moveEvt.clientY);
+        if(!rowEl) return;
+        const row = parseInt(rowEl.dataset.row, 10);
+        if(edge === 'bottom'){
+          const newEnd = Math.max(ev.startMonth, Math.min(12, row));
+          if(newEnd !== ev.endMonth){ ev.endMonth = newEnd; saveStore(); render(); }
+        } else {
+          const newStart = Math.min(ev.endMonth, Math.max(1, row));
+          if(newStart !== ev.startMonth){ ev.startMonth = newStart; saveStore(); render(); }
+        }
+      }
+      function onUp(){
+        document.removeEventListener('pointermove', onMove);
+        document.removeEventListener('pointerup', onUp);
+      }
+      document.addEventListener('pointermove', onMove);
+      document.addEventListener('pointerup', onUp);
+    });
+  }
+
+  // ---------- Done toggle on the card ----------
+  function buildDoneBtn(ev){
+    const b = document.createElement("button");
+    b.type = "button"; b.className = "done-btn";
+    const label = t(ev.done ? "ev.markUndone" : "ev.markDone");
+    b.title = label; b.setAttribute("aria-label", label); b.setAttribute("aria-pressed", ev.done ? "true" : "false");
+    b.innerHTML = '<span class="done-dot"><svg viewBox="0 0 24 24" fill="none" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg></span>';
+    b.addEventListener("pointerdown", (e)=> e.stopPropagation());   // don't start a card drag
+    b.addEventListener("click", ()=>{ ev.done = !ev.done; saveStore(); render(); });
+    return b;
+  }
+
+  // ---------- daily view: resize a card downwards (changes its end day) ----------
+  let justResized = false;
+  function attachDayResize(el, ev, m, n){
+    const handle = document.createElement('div');
+    handle.className = 'resize-handle bottom';
+    el.appendChild(handle);
+    handle.addEventListener('click', (e)=> e.stopPropagation());
+    handle.addEventListener('pointerdown', function(downEvt){
+      if(downEvt.button !== 0) return;
+      downEvt.preventDefault();
+      downEvt.stopPropagation();
+      let moved = false;
+      function onMove(moveEvt){
+        const rowEl = findRowAtY(moveEvt.clientY);
+        if(!rowEl) return;
+        const row = parseInt(rowEl.dataset.row, 10);
+        const sd = ev.startDay ? Math.min(ev.startDay, n) : 1;
+        const curEnd = ev.endDay ? Math.min(ev.endDay, n) : n;
+        const newEnd = Math.max(sd, Math.min(n, row));
+        if(newEnd === curEnd) return;
+        moved = true;
+        if(!ev.startDay) ev.startDay = sd;
+        ev.endDay = newEnd;
+        ev.endMonth = ev.startMonth;
+        saveStore(); render();
+      }
+      function onUp(){
+        document.removeEventListener('pointermove', onMove);
+        document.removeEventListener('pointerup', onUp);
+        if(moved){ justResized = true; setTimeout(()=>{ justResized = false; }, 80); }
+      }
+      document.addEventListener('pointermove', onMove);
+      document.addEventListener('pointerup', onUp);
+    });
+  }
+
+  // ---------- row hover highlight ----------
+  const gridEl = document.getElementById('grid');
+  gridEl.addEventListener('mousemove', (e)=>{
+    const rowEl = findRowAtY(e.clientY);
+    document.querySelectorAll('.row-line.row-hover').forEach(r=>{ if(r !== rowEl) r.classList.remove('row-hover'); });
+    if(rowEl) rowEl.classList.add('row-hover');
+  });
+  gridEl.addEventListener('mouseleave', ()=>{
+    document.querySelectorAll('.row-line.row-hover').forEach(r=>r.classList.remove('row-hover'));
+  });
+
+  // ---------- render ----------
+  function renderDay(){
+    const y = store.currentYear, m = dayMonth, n = daysInMonth(y, m);
+    const grid = document.getElementById("grid");
+    yearTitle.textContent = MONTHS[m-1] + " " + y;
+    backBtn.style.display = "";
+    const oldBanner = document.getElementById("conflictBanner");
+    if(oldBanner) oldBanner.remove();
+    grid.innerHTML = "";
+    grid.classList.add("day");
+    renderPlanList();
+    if(recapOpen) renderRecap();
+    const yd = getYearData(y);
+
+    // events that touch this month, with their day range inside it
+    const items = [];
+    yd.events.forEach((ev, idx)=>{
+      if(ev.scope !== "day") return;
+      if(S.hideDone && ev.done) return;
+      if(ev.startMonth > m || ev.endMonth < m) return;
+      const sd = (ev.startMonth === m && ev.startDay) ? Math.min(ev.startDay, n) : 1;
+      let ed = (ev.endMonth === m && ev.endDay) ? Math.min(ev.endDay, n) : n;
+      if(ed < sd) ed = sd;
+      items.push({ev, sd, ed, idx});
+    });
+    items.sort((a,b)=> a.sd - b.sd || (b.ed - b.sd) - (a.ed - a.sd) || a.idx - b.idx);
+    const slotEnd = [];
+    items.forEach(it=>{
+      let k = slotEnd.findIndex(e => e < it.sd);
+      if(k === -1){ k = slotEnd.length; slotEnd.push(0); }
+      slotEnd[k] = it.ed; it.slot = k;
+    });
+    const K = Math.max(6, slotEnd.length);
+    grid.style.setProperty("--slots", K);
+
+    const wdFmt = new Intl.DateTimeFormat(S.lang === "id" ? "id-ID" : "en-US", {weekday:"short"});
+    const today = new Date();
+    const isThisMonth = (today.getFullYear() === y && today.getMonth() + 1 === m);
+    const labels = [];
+    for(let d=1; d<=n; d++){
+      const dt = new Date(y, m-1, d), dow = dt.getDay();
+      const isToday = isThisMonth && today.getDate() === d;
+      const line = document.createElement("div");
+      line.className = "row-line" + (isToday ? " current-month" : "") + ((dow === 0 || dow === 6) ? " weekend" : "");
+      line.style.gridRow = d; line.style.gridColumn = "1 / " + (2 + K);
+      line.dataset.row = d;
+      grid.appendChild(line);
+
+      const label = document.createElement("div");
+      label.className = "day-label" + (isToday ? " is-today" : "");
+      label.style.gridRow = d; label.style.gridColumn = 1;
+      label.innerHTML = "<span class='d-num'>" + d + "</span><span class='d-name'>" + wdFmt.format(dt) + "</span>";
+      label.title = t("day.addTitle");
+      label.addEventListener("click", ()=> openModal({startMonth:m, endMonth:m, startDay:d, endDay:d}));
+      labels.push(label);
+    }
+    labels.forEach(l=> grid.appendChild(l));
+
+    // daily-task count (edited here; shown on the year chip)
+    const dcWrap = document.getElementById("dayCountWrap");
+    dcWrap.style.display = "flex";
+    const monthCards = yd.events.filter(e=> e.scope !== "day" && e.startMonth <= m && e.endMonth >= m);
+    const monthDone = monthCards.filter(e=> e.done).length;
+    document.getElementById("dayCountVal").textContent = (monthDone ? monthDone + "/" : "") + monthCards.length;
+
+    // event cards
+    const mon = MONTHS[m-1].slice(0, 3);
+    items.forEach(it=>{
+      const ev = it.ev;
+      const el = document.createElement("div");
+      el.dataset.eventId = ev.id;
+      el.className = "event " + ev.color + " span" + (ev.amount != null ? " has-amount" : "") + (ev.done ? " done" : "");
+      el.innerHTML = "<span class='ev-title'>" + escapeHtml(ev.title) + "</span>"
+        + (ev.note ? "<span class='note-preview'>" + escapeHtml(ev.note) + "</span>" : "")
+        + (ev.amount != null ? "<span class='amount-preview'>" + (ev.recurring ? "@" : "") + formatMoney(ev.amount) + (ev.recurring ? t("ev.perMonthShort") : "") + "</span>" : "");
+      const range = it.sd === it.ed ? (it.sd + " " + mon) : (it.sd + "–" + it.ed + " " + mon);
+      el.title = range + ". " + (ev.amount != null ? formatMoney(ev.amount) + (ev.recurring ? t("ev.perMonthTitle") : ". ") : "") + (ev.note ? t("ev.notePrefix") + ev.note : "");
+      el.style.gridRow = it.sd + " / " + (it.ed + 1);
+      el.style.gridColumn = 2 + it.slot;
+      el.addEventListener("click", (e)=>{ if(e.target.closest(".done-btn") || justResized) return; openModal(ev); });
+      el.appendChild(buildDoneBtn(ev));
+      attachDayResize(el, ev, m, n);
+      grid.appendChild(el);
+    });
+  }
+
+  function render(){
+    if(dayMonth != null){ renderDay(); return; }
+    backBtn.style.display = "none";
+    document.getElementById("dayCountWrap").style.display = "none";
+    yearTitle.textContent = store.currentYear;
+    const yAll = getYearData(store.currentYear);
+    const yd = { tasks: yAll.tasks, events: yAll.events.filter(e=> e.scope !== "day" && !(S.hideDone && e.done)) };   // yearly cards only (done ones can be hidden)
+    const grid = document.getElementById("grid");
+    grid.classList.remove("day");
+    grid.style.removeProperty("--slots");
+    grid.innerHTML = "";
+    renderPlanList();
+    if(recapOpen) renderRecap();
+
+    // count how many events are active on each row, to know where we'll need
+    // to reserve a slot for a "+N more" chip instead of overlapping
+    const totalForRow = Array.from({length:13}, ()=>0);
+    yd.events.forEach(ev=>{
+      for(let r=ev.startMonth; r<=ev.endMonth; r++){ totalForRow[r]++; }
+    });
+    // slot assignment to avoid overlap (respects preferredSlot set by dragging).
+    // K = number of slot columns (at least 6). The LAST column (K-1) is reserved for the
+    // "+N more" / collapse chip in every month that has more cards than fit, so the chip is
+    // always the rightmost card. If multi-month cards don't fit, K grows (up to MAX_YSLOTS).
+    const MAX_YSLOTS = 12;
+    const sorted = [...yd.events].sort((a,b)=> a.startMonth-b.startMonth || (b.endMonth-b.startMonth)-(a.endMonth-a.startMonth));
+    function placeAll(K){
+      const needsOverflow = Array.from({length:13}, (_,r)=> totalForRow[r] > K);
+      const occupied = Array.from({length:13}, ()=> new Array(K).fill(false));
+      for(let r=1; r<=12; r++){ if(needsOverflow[r]) occupied[r][K-1] = true; }
+      const placement = {};          // id -> slot
+      const overflowIds = new Set(); // events bumped into the "+N more" chip
+      const conflictIds = new Set();
+      let conflictCount = 0;
+      sorted.forEach(ev=>{
+        const isSpanning = ev.endMonth > ev.startMonth;
+        let rangeNeedsOverflow = false;
+        for(let r=ev.startMonth; r<=ev.endMonth; r++){ if(needsOverflow[r]) rangeNeedsOverflow = true; }
+        function isFree(slot){
+          for(let r=ev.startMonth; r<=ev.endMonth; r++){ if(occupied[r][slot]) return false; }
+          return true;
+        }
+        // multi-month cards keep their visual identity: never bump them into the
+        // "+N more" pool, only single-month cards are allowed to overflow there
+        const canOverflow = !isSpanning && rangeNeedsOverflow;
+        const maxSlot = canOverflow ? K-1 : K;
+        let slot = -1;
+        if(ev.preferredSlot != null && ev.preferredSlot < maxSlot && isFree(ev.preferredSlot)) slot = ev.preferredSlot;
+        if(slot === -1){
+          for(let s=0; s<maxSlot; s++){ if(isFree(s)){ slot=s; break; } }
+        }
+        if(slot === -1){
+          if(canOverflow){ overflowIds.add(ev.id); return; }
+          // no free slot at all -> real overlap (only when even MAX_YSLOTS columns are not enough)
+          slot = (ev.preferredSlot != null && ev.preferredSlot < K) ? ev.preferredSlot : K-1;
+          conflictCount++;
+          conflictIds.add(ev.id);
+        }
+        for(let r=ev.startMonth; r<=ev.endMonth; r++){ occupied[r][slot]=true; }
+        placement[ev.id]=slot;
+      });
+      return { needsOverflow, placement, overflowIds, conflictIds, conflictCount };
+    }
+    let ySlots = 6;
+    let placed = placeAll(ySlots);
+    while(placed.conflictCount > 0 && ySlots < MAX_YSLOTS){ ySlots++; placed = placeAll(ySlots); }
+    const { placement, overflowIds, conflictIds, conflictCount } = placed;
+    grid.style.setProperty("--yslots", ySlots);
+
+    // how many hidden/overflow events touch each row, for the "+N more" chip label
+    const overflowCountForRow = Array.from({length:13}, ()=>0);
+    yd.events.forEach(ev=>{
+      if(!overflowIds.has(ev.id)) return;
+      for(let r=ev.startMonth; r<=ev.endMonth; r++){ overflowCountForRow[r]++; }
+    });
+
+    // conflict warning banner
+    const existingBanner = document.getElementById('conflictBanner');
+    if(existingBanner) existingBanner.remove();
+    if(conflictCount > 0){
+      const banner = document.createElement('div');
+      banner.className = 'conflict-banner';
+      banner.id = 'conflictBanner';
+      banner.innerHTML = "<span class='icon'>⚠️</span><span>" + t(conflictCount === 1 ? "banner.one" : "banner.many", {n: conflictCount}) + "</span>";
+      grid.parentNode.insertBefore(banner, grid);
+    }
+
+    // compute the actual grid line for each month; expanded months reserve one
+    // extra line right after them for the dropdown strip of hidden items
+    let stripToAnimate = null;
+    const animOpenRow = openAnimRow;   // month that was just opened (if any)
+    const shadeFadeIn = [];            // shaded cards that should fade in
+    const lineFor = {};
+    let lineCursor = 1;
+    for(let r=1; r<=12; r++){
+      lineFor[r] = lineCursor;
+      lineCursor += expandedRows.has(r) ? 2 : 1;
+    }
+
+    for(let r=1; r<=12; r++){
+      const isCurrentMonth = (store.currentYear === REAL_YEAR && r === REAL_MONTH);
+      const isExpanded = expandedRows.has(r);
+      const gLine = lineFor[r];
+
+      const rowLine = document.createElement("div");
+      rowLine.className = "row-line" + (isCurrentMonth ? " current-month" : "");
+      rowLine.style.gridRow = isExpanded ? (gLine + " / " + (gLine + 2)) : gLine;
+      rowLine.dataset.row = r;
+      grid.appendChild(rowLine);
+
+      const label = document.createElement("div");
+      label.className = "month-label" + (isCurrentMonth ? " current-month" : "");
+      label.style.gridRow = gLine; label.style.gridColumn = 1;
+      label.innerHTML = "<span>"+MONTHS[r-1]+"</span>";
+      label.title = t("month.addTitle");
+      label.addEventListener("click", ()=> openModal({startMonth:r, endMonth:r}));
+      grid.appendChild(label);
+
+      const chipCell = document.createElement("div");
+      chipCell.className = "task-chip-cell";
+      chipCell.style.gridRow = gLine; chipCell.style.gridColumn = 2;
+      const chip = document.createElement("div");
+      chip.className = "task-chip";
+      const dayCards = yAll.events.filter(e=> e.scope === "day" && e.startMonth <= r && e.endMonth >= r);
+      const dayDone = dayCards.filter(e=> e.done).length;
+      chip.innerHTML = "<span>" + t(dayCards.length === 1 ? "task.one" : "task.many", {n: (dayDone ? dayDone + "/" : "") + dayCards.length}) + "</span>";
+      chip.title = t("task.edit");
+      chip.addEventListener("click", ()=> openDay(r));
+      chipCell.appendChild(chip);
+      grid.appendChild(chipCell);
+
+      // precompute occurrence index per (color) within this month, so repeated
+      // same-color cards get an alternating shade to stay distinguishable
+      const colorSeen = {};
+      const shadeIndexById = {};
+      yd.events.filter(e=> e.startMonth===r && e.endMonth===e.startMonth).forEach(ev=>{
+        colorSeen[ev.color] = (colorSeen[ev.color] || 0) + 1;
+        shadeIndexById[ev.id] = colorSeen[ev.color] - 1;
+      });
+
+      function buildEventCardEl(ev, isConflict, skipResize){
+        const el = document.createElement("div");
+        el.dataset.eventId = ev.id;
+        el.className = "event " + ev.color + " span" + (isConflict ? " conflict" : "") + (ev.amount != null ? " has-amount" : "") + (ev.done ? " done" : "");
+        const shadeIdx = shadeIndexById[ev.id] || 0;
+        const isSpanningCard = ev.endMonth > ev.startMonth;
+        if(isSpanningCard){
+          let hasOpenChip = false;
+          for(let m=ev.startMonth; m<=ev.endMonth; m++){ if(expandedRows.has(m)) { hasOpenChip = true; break; } }
+          if(hasOpenChip){
+            el.classList.add("shaded");
+            el.dataset.start = ev.startMonth; el.dataset.end = ev.endMonth;
+            if(animOpenRow != null && animOpenRow >= ev.startMonth && animOpenRow <= ev.endMonth){ shadeFadeIn.push(el); }
+            else el.classList.add("shade-on");
+          }
+        }
+        if(!isSpanningCard){
+          if(shadeIdx % 2 === 1){ el.style.filter = "brightness(1.16)"; }
+          else if(shadeIdx % 2 === 0 && shadeIdx > 0){ el.style.filter = "brightness(0.86)"; }
+        }
+        el.innerHTML = "<span class='ev-title'>"+(isConflict ? "⚠️ " : "")+escapeHtml(ev.title)+"</span>"
+          + (ev.note ? "<span class='note-preview'>"+escapeHtml(ev.note)+"</span>" : "")
+          + (ev.amount != null ? "<span class='amount-preview'>"+(ev.recurring ? "@" : "")+formatMoney(ev.amount)+(ev.recurring ? t("ev.perMonthShort") : "")+"</span>" : "");
+        el.title = isConflict
+          ? t("ev.conflict")
+          : ((ev.amount != null ? formatMoney(ev.amount) + (ev.recurring ? t("ev.perMonthTitle") : ". ") : "") + (ev.note ? t("ev.notePrefix") + ev.note : t("ev.hint")));
+        attachDrag(el, ev);
+        el.appendChild(buildDoneBtn(ev));
+        if(!skipResize){
+          attachResize(el, ev, 'top');
+          attachResize(el, ev, 'bottom');
+        }
+        return el;
+      }
+
+      // main row: the visible (up to maxSlot) cards, always in place
+      yd.events.filter(e=> e.startMonth===r && !overflowIds.has(e.id)).forEach(ev=>{
+        const el = buildEventCardEl(ev, conflictIds.has(ev.id));
+        el.style.gridRow = gLine + " / " + (lineFor[ev.endMonth] + 1);
+        el.style.gridColumn = 3 + placement[ev.id];
+        grid.appendChild(el);
+      });
+
+      // the "+N more" chip always stays put as the toggle, in both states
+      if(overflowCountForRow[r] > 0){
+        const moreChip = document.createElement("div");
+        moreChip.className = "event more-chip span";
+        moreChip.style.gridRow = gLine;
+        moreChip.style.gridColumn = 2 + ySlots; // always the last (rightmost) slot column
+        moreChip.textContent = isExpanded ? t("more.collapse") : t("more.n", {n: overflowCountForRow[r]});
+        moreChip.title = isExpanded ? t("more.hide") : t("more.show");
+        moreChip.addEventListener("click", ()=>{
+          if(isExpanded){
+            const strip = grid.querySelector('.row-scroll[data-row="'+r+'"]');
+            if(strip && strip.animate && !reduceMotion){
+              if(strip.dataset.closing) return;
+              strip.dataset.closing = "1";
+              moreChip.textContent = t("more.n", {n: overflowCountForRow[r]});
+              strip.style.overflow = "hidden";
+              grid.querySelectorAll(".event.shaded").forEach(card=>{
+                const a = +card.dataset.start, b = +card.dataset.end;
+                if(r < a || r > b) return;
+                let stillOpen = false;
+                for(let m=a; m<=b; m++){ if(m !== r && expandedRows.has(m)) stillOpen = true; }
+                if(!stillOpen) card.classList.remove("shade-on");
+              });
+              const cs = getComputedStyle(strip);
+              const anim = strip.animate([
+                { height: strip.offsetHeight + "px", paddingTop: cs.paddingTop, paddingBottom: cs.paddingBottom, opacity: 1 },
+                { height: "0px", paddingTop: "0px", paddingBottom: "0px", opacity: 0 }
+              ], { duration: 240, easing: "cubic-bezier(.4,0,.6,1)", fill: "forwards" });
+              anim.onfinish = ()=>{ expandedRows.delete(r); render(); };
+              return;
+            }
+            expandedRows.delete(r);
+          } else {
+            expandedRows.add(r);
+            openAnimRow = r;
+          }
+          render();
+        });
+        grid.appendChild(moreChip);
+      }
+
+      // dropdown strip right below this row: only the hidden/overflow items, scrollable sideways
+      if(isExpanded){
+        const overflowEvents = yd.events.filter(e=> e.startMonth===r && overflowIds.has(e.id));
+        const scrollWrap = document.createElement("div");
+        scrollWrap.className = "row-scroll";
+        scrollWrap.dataset.row = r;
+        scrollWrap.style.gridRow = gLine + 1;
+        scrollWrap.style.gridColumn = "3 / -1";
+        overflowEvents.forEach(ev=>{
+          const el = buildEventCardEl(ev, false, true);
+          el.classList.remove("span");
+          scrollWrap.appendChild(el);
+        });
+        grid.appendChild(scrollWrap);
+        if(openAnimRow === r){ stripToAnimate = scrollWrap; openAnimRow = null; }
+      }
+    }
+
+    if(shadeFadeIn.length){
+      void grid.offsetWidth; // commit opacity:0 first so the class change transitions
+      shadeFadeIn.forEach(el=> el.classList.add("shade-on"));
+    }
+
+    // smoothly grow the freshly opened strip (rows below and tall cards follow along)
+    if(stripToAnimate && stripToAnimate.animate && !reduceMotion){
+      const el = stripToAnimate;
+      const cs = getComputedStyle(el);
+      const h = el.scrollHeight, pt = cs.paddingTop, pb = cs.paddingBottom;
+      el.style.overflow = "hidden";
+      const anim = el.animate([
+        { height: "0px", paddingTop: "0px", paddingBottom: "0px", opacity: 0 },
+        { height: h + "px", paddingTop: pt, paddingBottom: pb, opacity: 1 }
+      ], { duration: 240, easing: "cubic-bezier(.2,.8,.2,1)" });
+      const done = ()=>{ el.style.overflow = ""; };
+      anim.onfinish = done; anim.oncancel = done;
+    }
+  }
+
+  // ---------- money: formatting & parsing follow the settings ----------
+  function fmtNum(abs, fmtKey, decimals){
+    const nf = NUMFMTS[fmtKey] || NUMFMTS.dot;
+    const parts = abs.toFixed(decimals).split(".");
+    const ip = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, nf.group);
+    return parts[1] ? ip + nf.dec + parts[1] : ip;
+  }
+  function currencySymbol(){ return CURRENCIES[S.currency].symbol; }
+  function formatMoney(n){
+    if(n == null) return "";
+    const num = Number(n);
+    if(isNaN(num)) return "";
+    const f = Math.pow(10, S.decimals);
+    const abs = Math.round(Math.abs(num) * f) / f;
+    const cur = CURRENCIES[S.currency];
+    const sign = (num < 0 && abs !== 0) ? "-" : "";
+    const sym = cur.symbol ? cur.symbol + (cur.space ? "\u00a0" : "") : "";
+    return sign + sym + fmtNum(abs, S.numFormat, S.decimals);
+  }
+  // text typed by the user -> number (or null). Only the chosen decimal separator counts as a decimal point.
+  function parseAmount(str){
+    let v = String(str == null ? "" : str).trim();
+    if(!v) return null;
+    const neg = /^[-\u2212]/.test(v);
+    v = v.replace(/^[-\u2212]\s*/, "");
+    const nf = NUMFMTS[S.numFormat];
+    let intPart = v, decPart = "";
+    if(S.decimals > 0){
+      const idx = v.lastIndexOf(nf.dec);
+      if(idx !== -1){ intPart = v.slice(0, idx); decPart = v.slice(idx + 1); }
+    }
+    intPart = intPart.replace(/\D/g, "");
+    decPart = decPart.replace(/\D/g, "").slice(0, S.decimals);
+    if(!intPart && !decPart) return null;
+    let num = parseFloat((intPart || "0") + (decPart ? "." + decPart : ""));
+    const f = Math.pow(10, S.decimals);
+    num = Math.round(num * f) / f;
+    if(num === 0) return 0;
+    return neg ? -num : num;
+  }
+  // number -> plain editable text (no grouping, chosen decimal separator)
+  function amountToInput(n){
+    const num = Number(n);
+    if(isNaN(num)) return "";
+    let txt = Math.abs(num).toFixed(S.decimals);
+    if(txt.indexOf(".") !== -1) txt = txt.replace(/\.?0+$/, "");
+    txt = txt.replace(".", NUMFMTS[S.numFormat].dec);
+    return (num < 0 ? "-" : "") + txt;
+  }
+
+  function escapeHtml(s){
+    return s.replace(/[&<>"']/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+  }
+
+  // ---------- settings: apply ----------
+  const darkQuery = window.matchMedia ? window.matchMedia("(prefers-color-scheme: dark)") : null;
+  function resolvedTheme(){
+    if(S.theme === "system") return (darkQuery && darkQuery.matches) ? "dark" : "light";
+    return S.theme;
+  }
+  function applyAppearance(){
+    const root = document.documentElement;
+    const th = resolvedTheme();
+    root.setAttribute("data-theme", th);
+    root.setAttribute("data-density", S.density);
+    const a = ACCENTS[S.accent], m = MONEY_ACCENTS[S.moneyAccent];
+    root.style.setProperty("--blue", a.fill);
+    root.style.setProperty("--accent-fg", th === "dark" ? a.dark : a.fill);
+    root.style.setProperty("--money", m.fill);
+    root.style.setProperty("--money-fg", th === "dark" ? m.dark : m.fill);
+  }
+  if(darkQuery){
+    const onScheme = ()=>{ if(S.theme === "system"){ applyAppearance(); refreshSettingsUI(); } };
+    if(darkQuery.addEventListener) darkQuery.addEventListener("change", onScheme);
+    else if(darkQuery.addListener) darkQuery.addListener(onScheme);
+  }
+
+  function amountLabelText(){
+    const sym = currencySymbol();
+    return t("amount") + (sym ? " (" + sym + ")" : "");
+  }
+  function applyStaticI18n(){
+    document.documentElement.setAttribute("lang", S.lang);
+    document.querySelectorAll("[data-i18n]").forEach(el=>{ el.textContent = t(el.dataset.i18n); });
+    document.querySelectorAll("[data-i18n-ph]").forEach(el=>{ el.setAttribute("placeholder", t(el.dataset.i18nPh)); });
+    document.querySelectorAll("[data-i18n-title]").forEach(el=>{
+      const v = t(el.dataset.i18nTitle);
+      el.setAttribute("title", v);
+      if(el.hasAttribute("aria-label")) el.setAttribute("aria-label", v);
+    });
+    document.querySelectorAll(".amount-label").forEach(el=>{ el.textContent = amountLabelText(); });
+    const dec = NUMFMTS[S.numFormat].dec;
+    document.getElementById("fAmount").setAttribute("placeholder", t(S.decimals > 0 ? "amountPhDec" : "amountPh", {d: dec}));
+    document.getElementById("pAmount").setAttribute("placeholder", t(S.decimals > 0 ? "planAmountPhDec" : "planAmountPh", {d: dec}));
+  }
+
+  function applyAll(){
+    MONTHS = MONTH_NAMES[S.lang];
+    applyAppearance();
+    buildMonthSelects();
+    applyStaticI18n();
+    render();
+    refreshSettingsUI();
+    setDriveState(driveState);
+  }
+
+  // ---------- settings: modal UI ----------
+  const settingsOverlay = document.getElementById("settingsOverlay");
+  const sCurrency = document.getElementById("sCurrency");
+  const sNumFmt = document.getElementById("sNumFmt");
+  const segUpdaters = [];
+
+  function makeSeg(id, keys, labelFn, getCur, onPick){
+    const el = document.getElementById(id);
+    el.setAttribute("role", "group");
+    el.innerHTML = "";
+    const btns = keys.map(k=>{
+      const b = document.createElement("button");
+      b.type = "button"; b.dataset.key = String(k);
+      b.addEventListener("click", ()=> onPick(k));
+      el.appendChild(b);
+      return b;
+    });
+    segUpdaters.push(()=>{
+      btns.forEach(b=>{
+        b.textContent = labelFn(b.dataset.key);
+        const on = String(getCur()) === b.dataset.key;
+        b.classList.toggle("on", on);
+        b.setAttribute("aria-pressed", on ? "true" : "false");
+      });
+    });
+  }
+  function makeSwatches(id, map, getCur, onPick){
+    const el = document.getElementById(id);
+    el.setAttribute("role", "group");
+    el.innerHTML = "";
+    const btns = Object.keys(map).map(k=>{
+      const b = document.createElement("button");
+      b.type = "button"; b.className = "swatch-btn"; b.dataset.key = k;
+      b.style.background = map[k].fill;
+      b.addEventListener("click", ()=> onPick(k));
+      el.appendChild(b);
+      return b;
+    });
+    segUpdaters.push(()=>{
+      btns.forEach(b=>{
+        const on = getCur() === b.dataset.key;
+        b.classList.toggle("selected", on);
+        b.setAttribute("aria-pressed", on ? "true" : "false");
+        b.title = t("ac." + b.dataset.key);
+        b.setAttribute("aria-label", b.title);
+      });
+    });
+  }
+
+  function currencyName(code){
+    if(code === "NONE") return t("cur.none");
+    try{ return new Intl.DisplayNames([S.lang], {type:"currency"}).of(code) || code; }catch(e){ return code; }
+  }
+  function refreshSettingsUI(){
+    // currency select
+    sCurrency.innerHTML = "";
+    Object.keys(CURRENCIES).forEach(code=>{
+      const o = document.createElement("option");
+      o.value = code;
+      const sym = CURRENCIES[code].symbol;
+      o.textContent = code === "NONE" ? t("cur.none") : (code + " (" + sym + ") — " + currencyName(code));
+      sCurrency.appendChild(o);
+    });
+    sCurrency.value = S.currency;
+    // number-format select: options show a sample using the current decimals
+    sNumFmt.innerHTML = "";
+    Object.keys(NUMFMTS).forEach(k=>{
+      const o = document.createElement("option");
+      o.value = k; o.textContent = fmtNum(1234567.89, k, S.decimals);
+      sNumFmt.appendChild(o);
+    });
+    sNumFmt.value = S.numFormat;
+    segUpdaters.forEach(fn=>fn());
+    document.getElementById("sPrev1").textContent = formatMoney(1234567.89);
+    document.getElementById("sPrev2").textContent = formatMoney(-500000);
+  }
+
+  function commit(){ saveStore(); }
+  function onMoneyChange(){ commit(); applyStaticI18n(); render(); refreshSettingsUI(); }
+
+  sCurrency.addEventListener("change", ()=>{ S.currency = sCurrency.value; onMoneyChange(); });
+  sNumFmt.addEventListener("change", ()=>{ S.numFormat = sNumFmt.value; onMoneyChange(); });
+  makeSeg("sDecimals", [0, 2], k=> t("dec." + k), ()=>S.decimals, k=>{ S.decimals = Number(k); onMoneyChange(); });
+  makeSeg("sLang", Object.keys(LANGS), k=> LANGS[k], ()=>S.lang, k=>{ S.lang = k; commit(); applyAll(); });
+  makeSeg("sTheme", ["light","dark","system"], k=> t("theme." + k), ()=>S.theme, k=>{ S.theme = k; commit(); applyAppearance(); refreshSettingsUI(); });
+  makeSeg("sHideDone", ["show","hide"], k=> t("set." + k), ()=>(S.hideDone ? "hide" : "show"), k=>{ S.hideDone = (k === "hide"); commit(); render(); refreshSettingsUI(); });
+  makeSeg("sDensity", ["comfortable","compact"], k=> t("density." + k), ()=>S.density, k=>{ S.density = k; commit(); applyAppearance(); refreshSettingsUI(); });
+  makeSwatches("sAccent", ACCENTS, ()=>S.accent, k=>{ S.accent = k; commit(); applyAppearance(); refreshSettingsUI(); });
+  makeSwatches("sMoney", MONEY_ACCENTS, ()=>S.moneyAccent, k=>{ S.moneyAccent = k; commit(); applyAppearance(); refreshSettingsUI(); });
+
+  function openSettings(){ refreshSettingsUI(); settingsOverlay.classList.add("open"); }
+  function closeSettings(){ settingsOverlay.classList.remove("open"); if(typeof disarmSample === "function") disarmSample(); }
+  const settingsBtn = document.getElementById("settingsBtn");
+  settingsBtn.addEventListener("click", openSettings);
+  settingsBtn.addEventListener("keydown", (e)=>{ if(e.key === "Enter" || e.key === " "){ e.preventDefault(); openSettings(); } });
+  document.getElementById("sDoneBtn").addEventListener("click", closeSettings);
+  settingsOverlay.addEventListener("click", (e)=>{ if(e.target === settingsOverlay) closeSettings(); });
+  document.addEventListener("keydown", (e)=>{ if(e.key === "Escape" && settingsOverlay.classList.contains("open")) closeSettings(); });
+  // "Delete all & load samples": wipes every card/plan of every year first, then loads the samples.
+  // Two clicks (the first one arms the button for 5 seconds) so it can't be triggered by accident.
+  const sSampleBtn = document.getElementById("sSampleBtn");
+  let sampleArmTimer = null;
+  function disarmSample(){
+    clearTimeout(sampleArmTimer); sampleArmTimer = null;
+    sSampleBtn.classList.remove("armed");
+    sSampleBtn.textContent = t("set.sampleAdd");
+  }
+  sSampleBtn.addEventListener("click", ()=>{
+    if(!sampleArmTimer){
+      sSampleBtn.classList.add("armed");
+      sSampleBtn.textContent = t("set.sampleConfirm");
+      sampleArmTimer = setTimeout(disarmSample, 5000);
+      return;
+    }
+    disarmSample();
+    const y = store.currentYear;
+    const dm = dayMonth || sampleDayMonth(y);
+    const smp = buildSample(y, dm, S.lang);
+    const stamp = Date.now();
+    store.years = {};                       // delete everything first (all years)
+    const yd = getYearData(y);
+    smp.events.forEach((e, i)=>{ e.id = "e" + stamp + "_" + i; yd.events.push(e); });
+    store.plans = smp.plans.map((p, i)=> Object.assign(p, { id:"p" + stamp + "_" + i }));
+    expandedRows.clear();
+    commit(); closeSettings(); render();
+  });
+  document.getElementById("sResetBtn").addEventListener("click", ()=>{
+    Object.assign(S, DEFAULT_SETTINGS);
+    commit(); applyAll();
+  });
+
+  // ---------- Drive sync UI wiring ----------
+  const driveSyncBtn = document.getElementById("driveSyncBtn");
+  const driveDisconnectBtn = document.getElementById("driveDisconnectBtn");
+  setDriveState(driveState);
+  driveSyncBtn.addEventListener("click", (e)=>{
+    if(e.target === driveDisconnectBtn) return;
+    if(!driveTokenClient) return; // not configured yet
+    if(driveState === "synced" || driveState === "saving"){
+      driveOnConnected(); // already connected -> manual re-sync
+      return;
+    }
+    setDriveState("connecting");
+    driveTokenClient.requestAccessToken({ prompt: "consent" });
+  });
+  driveDisconnectBtn.addEventListener("click", (e)=>{
+    e.stopPropagation();
+    if(driveAccessToken && window.google && google.accounts && google.accounts.oauth2){
+      google.accounts.oauth2.revoke(driveAccessToken, ()=>{});
+    }
+    driveAccessToken = null; driveFileId = null;
+    try{ localStorage.removeItem(DRIVE_CONNECTED_KEY); }catch(e){}
+    setDriveState("idle");
+  });
+  waitForGIS(initDrive);
+
+  applyAppearance();
+  applyStaticI18n();
+  refreshSettingsUI();
+  render();
+})();
+</script>
+</body>
+</html>
