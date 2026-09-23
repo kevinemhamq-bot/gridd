@@ -119,7 +119,27 @@ try{
 
   /* Main */
   .main{ flex:1; padding:14px 24px 40px; }
-  .topbar{ display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; }
+  .topbar{ display:flex; flex-direction:column; gap:10px; margin-bottom:12px; }
+  .view-mode-row{ display:flex; align-items:center; justify-content:space-between; gap:12px; }
+  .view-mode-group{ display:flex; align-items:center; gap:18px; flex:1; min-width:0; }
+  .view-mode-label{ font-size:13.5px; font-weight:600; color:var(--muted); letter-spacing:.2px; line-height:1; white-space:nowrap; flex:none; }
+  .view-seg,.seg.view-seg{
+    position:relative; display:inline-flex; align-items:center; gap:6px; width:auto; max-width:none;
+    border:none; background:var(--chip-bg); cursor:grab; touch-action:none; user-select:none;
+    -webkit-tap-highlight-color:transparent; -webkit-touch-callout:none;
+    border-radius:999px; padding:4px; box-shadow:0 1px 3px rgba(0,0,0,.12), inset 0 1px 2px rgba(0,0,0,.06); overflow:visible;
+  }
+  .seg.view-seg button{ position:relative; z-index:2; flex:0 0 auto; padding:8px 20px; border-radius:999px; background:transparent; color:var(--muted); font-size:13.5px; line-height:1; text-align:center; -webkit-tap-highlight-color:transparent; transition:color .25s ease, transform .15s cubic-bezier(.4,0,.2,1); }
+  .seg.view-seg button + button{ border-left:none; }
+  .seg.view-seg button.on{ background:transparent; color:var(--accent-fg); font-weight:600; }
+  .view-thumb{
+    position:absolute; top:4px; bottom:4px; left:0; width:60px;
+    background:var(--surface); border-radius:999px; box-shadow:0 1px 3px rgba(0,0,0,.18);
+    transition:transform .28s cubic-bezier(.4,0,.2,1), width .28s cubic-bezier(.4,0,.2,1), box-shadow .28s ease;
+    z-index:1; pointer-events:none;
+  }
+  .view-thumb.dragging{ transition:none; box-shadow:0 2px 6px rgba(0,0,0,.28); }
+  .topbar-row{ display:flex; align-items:center; justify-content:space-between; }
   .year-nav{ display:flex; align-items:center; gap:8px; }
   .nav-btn{ width:34px; height:34px; border-radius:50%; border:none; background:transparent; display:flex; align-items:center; justify-content:center; cursor:pointer; color:var(--muted); font-size:18px; }
   .nav-btn:hover{ background:var(--chip-bg); }
@@ -146,10 +166,44 @@ try{
     background:var(--bg); border-radius:12px; border:1px solid var(--border);
     display:grid; grid-template-columns:150px 120px repeat(var(--yslots,6), minmax(110px,1fr));
     grid-auto-rows:auto; column-gap:8px; overflow-x:auto; overflow-y:hidden; position:relative;
-    padding-right:14px;
+    padding-right:14px; transition:opacity .16s ease, transform .16s ease;
   }
+  .grid.nav-fade{ opacity:0; transform:translateY(4px); }
+  @media (prefers-reduced-motion: reduce){ .grid{ transition:none; } }
   .row-line{ grid-column:1 / -1; border-bottom:1px solid var(--border); transition:background .3s; }
   .row-line.today{ background:var(--accent-tint); }
+
+  /* single-day view: one specific date, hourly agenda grid */
+  .grid.single-day{ display:block; position:relative; padding:0 22px 40px; overflow:visible; }
+  .grid.single-day .row-line{ position:absolute; inset:0; border:none; pointer-events:none; }
+  .grid.single-day .row-line.drop-target{ background:var(--accent-tint); }
+  .day-view-inner{ position:relative; z-index:1; }
+  .all-day-strip{ position:relative; display:flex; align-items:center; padding:6px 0; border-bottom:1px solid var(--border); margin-bottom:8px; box-sizing:border-box; }
+  .all-day-label{ position:absolute; left:0; width:56px; box-sizing:border-box; overflow:visible; white-space:nowrap; text-align:right; padding-right:8px; font-size:10.5px; color:var(--muted); text-transform:uppercase; letter-spacing:.3px; }
+  .all-day-list{ flex:1; display:flex; flex-wrap:wrap; gap:6px; min-height:28px; }
+  .all-day-strip .all-day-list{ margin-left:64px; }
+  .all-day-card{ padding:5px 10px; border-radius:14px; font-size:12.5px; cursor:pointer; color:#fff; }
+  .all-day-card.done{ opacity:.62; text-decoration:line-through; }
+  .all-day-add{ width:28px; height:28px; border-radius:8px; border:1px dashed var(--border); color:var(--muted); display:flex; align-items:center; justify-content:center; cursor:pointer; font-size:16px; }
+  .all-day-add:hover{ background:var(--chip-bg); }
+  .month-recap-strip{ display:flex; align-items:center; gap:10px; padding:6px 0; border-bottom:1px solid var(--border); transition:background .1s; min-height:var(--row-min-h); box-sizing:border-box; }
+  .month-recap-strip.drop-target{ background:var(--accent-tint); }
+  .month-recap-label{ flex:none; width:94px; box-sizing:border-box; padding-left:16px; font-size:10.5px; color:var(--muted); text-transform:uppercase; letter-spacing:.3px; }
+  .month-recap-strip .all-day-list{ flex:1; }
+  .month-recap-empty{ font-size:12px; color:var(--muted); }
+  .day-hours{ position:relative; margin-left:64px; border-left:1px solid var(--border); }
+  .hour-row{ position:absolute; left:-64px; right:0; border-top:1px solid var(--border); cursor:pointer; }
+  .hour-row:hover{ background:var(--row-hover); }
+  .hour-label{ position:absolute; left:-64px; width:56px; text-align:right; padding-right:8px; font-size:11px; color:var(--muted); transform:translateY(-7px); box-sizing:border-box; }
+  .now-line{ position:absolute; left:0; right:0; height:2px; background:var(--tomato); z-index:3; pointer-events:none; }
+  .now-line::before{ content:""; position:absolute; left:-4px; top:-4px; width:9px; height:9px; border-radius:50%; background:var(--tomato); }
+  .timed-card{ overflow:hidden; padding:3px 7px; font-size:11.5px; line-height:1.3; box-sizing:border-box; z-index:2; cursor:grab; }
+  .timed-card:active{ cursor:grabbing; }
+  .timed-card .time-preview{ display:block; font-size:10px; opacity:.85; }
+  .event.span .time-preview{ display:block; font-size:10px; opacity:.85; }
+  /* override .event's flex-layout defaults so the timed card can be absolutely positioned in the hourly grid */
+  .event.timed-card{ position:absolute; margin:0; align-self:auto; }
+  .event.timed-card .amount-preview{ position:static; display:block; }
   .row-line.current-month{ background:var(--accent-tint-2); box-shadow:inset 3px 0 0 var(--blue); }
   .row-line.row-hover{ background:var(--row-hover); }
   .row-line.current-month.row-hover{ background:var(--accent-tint); }
@@ -378,7 +432,7 @@ try{
   .link-muted:hover{ text-decoration:underline; color:var(--text); }
 
   /* ---------- Daily view ---------- */
-  .grid.day{ grid-template-columns:150px repeat(var(--slots,6), minmax(110px,1fr)); }
+  .grid.day{ grid-template-columns:150px 120px repeat(var(--slots,6), minmax(110px,1fr)); }
   .day-label{ min-height:32px; display:flex; align-items:center; gap:8px; padding:4px 0 4px 16px; font-size:var(--label-font); cursor:pointer; border-radius:8px; }
   .day-label:hover{ color:var(--accent-fg); }
   .day-label .d-num{ width:22px; text-align:right; font-weight:600; font-variant-numeric:tabular-nums; }
@@ -391,7 +445,7 @@ try{
   .day-count-val{ min-width:28px; padding:3px 10px; border-radius:12px; background:var(--chip-bg); color:var(--text); font-size:13px; font-weight:700; text-align:center; font-variant-numeric:tabular-nums; }
   .grid.day .event{ cursor:pointer; margin:2px 0; padding-top:3px; }
   .grid.day .event:not(.has-amount){ padding-bottom:3px; }
-  @media (max-width:1180px){ .grid.day{ grid-template-columns:110px repeat(var(--slots,6), minmax(110px,1fr)); } }
+  @media (max-width:1180px){ .grid.day{ grid-template-columns:110px 100px repeat(var(--slots,6), minmax(110px,1fr)); } }
 
   /* ---------- Responsive ---------- */
   .topbar{ flex-wrap:wrap; gap:10px 12px; }
@@ -423,6 +477,9 @@ try{
     .settings{ position:absolute; top:10px; right:12px; margin:0; padding:5px 12px 5px 10px; border:1px solid var(--border); background:var(--surface); }
     .main{ padding:12px 12px 32px; }
     .recap-tab{ margin-right:-12px; }
+    .view-mode-row{ flex-wrap:wrap; }
+    .view-mode-row .view-mode-group{ flex:1 1 100%; }
+    .view-mode-row .view-seg{ flex:none; }
   }
 
   /* Google Drive sync widget */
@@ -480,19 +537,29 @@ try{
 
   <div class="main">
     <div class="topbar">
-      <div class="year-nav">
-        <button class="btn" id="backBtn" style="display:none;" data-i18n="day.back">‹ Year</button>
-        <button class="nav-btn" id="prevYear">&#8249;</button>
-        <button class="nav-btn" id="nextYear">&#8250;</button>
-        <div class="year-title" id="yearTitle">2026</div>
+      <div class="view-mode-row">
+        <div class="view-mode-group">
+          <span class="view-mode-label" id="viewModeLabel" data-i18n="view.label">View</span>
+          <div class="seg view-seg" id="viewModeSeg"></div>
+        </div>
+        <div class="top-actions">
+          <button class="btn btn-primary" id="addBtn" data-i18n="event.addBtn">+ Add Event</button>
+          <button class="recap-tab" id="recapBtn" title="Summary" aria-label="Summary" data-i18n-title="summary">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5.5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H7"/></svg>
+          </button>
+        </div>
       </div>
-      <div class="top-actions">
-        <div class="day-count" id="dayCountWrap"><span data-i18n="day.count">Month plan</span><b class="day-count-val" id="dayCountVal">0</b></div>
-        <button class="btn" id="todayBtn" data-i18n="today">Today</button>
-        <button class="btn btn-primary" id="addBtn" data-i18n="event.addBtn">+ Add Event</button>
-        <button class="recap-tab" id="recapBtn" title="Summary" aria-label="Summary" data-i18n-title="summary">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5.5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H7"/></svg>
-        </button>
+      <div class="topbar-row">
+        <div class="year-nav">
+          <button class="btn" id="backBtn" style="display:none;">‹ Year</button>
+          <button class="nav-btn" id="prevYear">&#8249;</button>
+          <button class="nav-btn" id="nextYear">&#8250;</button>
+          <div class="year-title" id="yearTitle">2026</div>
+        </div>
+        <div class="top-actions">
+          <div class="day-count" id="dayCountWrap"><span data-i18n="day.count">Month plan</span><b class="day-count-val" id="dayCountVal">0</b></div>
+          <button class="btn" id="todayBtn" data-i18n="today">Today</button>
+        </div>
       </div>
     </div>
 
@@ -539,6 +606,19 @@ try{
           <input type="text" id="fEndDay" inputmode="numeric" placeholder="—">
         </div>
       </div>
+      <div id="allDayRow" style="display:none;">
+        <label class="check-row"><input type="checkbox" id="fAllDay" checked><span data-i18n="event.allDay">All day</span></label>
+      </div>
+      <div class="row2" id="timeFieldsRow" style="display:none;">
+        <div class="field">
+          <label data-i18n="event.startTime">Start time</label>
+          <input type="time" id="fStartTime">
+        </div>
+        <div class="field">
+          <label data-i18n="event.endTime">End time</label>
+          <input type="time" id="fEndTime">
+        </div>
+      </div>
       <div class="field">
         <label data-i18n="color">Color</label>
         <div class="swatches" id="swatches"></div>
@@ -564,7 +644,7 @@ try{
   <!-- Task modal -->
   <div class="overlay" id="taskOverlay">
     <div class="modal">
-      <h3 id="taskModalTitle">Daily Tasks</h3>
+      <h3 id="taskModalTitle">Daily Plan</h3>
       <div class="field">
         <label data-i18n="task.count">Number of daily tasks</label>
         <input type="text" id="tCount" inputmode="numeric" placeholder="0">
@@ -718,6 +798,7 @@ try{
 
   const I18N = {
     en:{
+      "view.label":"View mode:","view.year":"Year","view.month":"Month","view.day":"Day","day.backMonth":"‹ Month","day.empty":"No events on this day yet. Click to add one.",
       "plans":"Plans","day.back":"‹ Year","day.addTitle":"Click to add an event on this date","day.notes":"Monthly notes","day.notesPh":"Write notes for this month...","day.count":"Month plan","event.startDay":"Start day (optional)","event.endDay":"End day (optional)","plan.placeholder":"Add a new plan...","plan.add":"Add plan","hint":"Drag a plan onto the calendar to add a new event.",
       "settings":"Settings","today":"Today","event.addBtn":"+ Add Event","summary":"Summary","close":"Close",
       "event.add":"Add Event","event.edit":"Edit Event","event.title":"Event title","event.titlePh":"e.g. Annual meeting",
@@ -725,9 +806,12 @@ try{
       "amountPh":"e.g. 1500000, -500000, or @-2000 (monthly)","amountPhDec":"e.g. 1500{d}50, -500{d}25, or @-20{d}5 (monthly)",
       "planAmountPh":"e.g. 1500000 or -500000","planAmountPhDec":"e.g. 1500{d}50 or -500{d}25",
       "note":"Note","event.notePh":"Add a note for this event...","event.delete":"Delete event","cancel":"Cancel","save":"Save",
-      "task.title":"Daily Tasks","task.count":"Number of daily tasks","task.notePh":"Write a note for this month...",
-      "task.one":"{n} daily task","task.many":"{n} daily tasks",
+      "event.allDay":"All day","event.startTime":"Start time","event.endTime":"End time","day.allDay":"All-day","day.addTimeTitle":"Click to add an event at this time",
+      "task.title":"Daily Plan","task.count":"Number of daily plans","task.notePh":"Write a note for this month...",
+      "task.one":"{n} daily plan","task.many":"{n} daily plans",
       "task.hasNote":"Has a note — click to open the daily view","task.edit":"Click to open the daily view",
+      "month.timedPlan":"Timed Plan","month.allMonth":"All-month","year.wholeYear":"Whole year",
+      "timed.one":"{n} timed plan","timed.many":"{n} timed plans","timed.none":"No timed plan","timed.edit":"Click to open the daily view",
       "plan.edit":"Edit Plan","plan.name":"Plan name","plan.namePh":"e.g. Driving lessons","plan.notePh":"Add a note for this plan...",
       "plan.delete":"Delete plan","plan.empty":"No plans yet. Add one using the field above.",
       "plan.hasInfo":"Has a note/amount — double-click to view or edit","plan.noInfo":"Double-click to add a note or amount",
@@ -749,6 +833,7 @@ try{
       "drive.landing.title":"Sync with Google Drive","drive.landing.desc":"Sign in to keep your planner backed up and synced across devices.","drive.landing.expiredTitle":"Your session expired","drive.landing.expiredDesc":"Sign in again to keep syncing with Google Drive.","drive.landing.connecting":"Opening Google sign-in…","drive.landing.failed":"Sign-in failed or was cancelled. Try again, or continue without Drive.","drive.landing.signin":"Sign in with Google","drive.landing.skip":"Continue without Drive"
     },
     id:{
+      "view.label":"Mode tampilan:","view.year":"Tahun","view.month":"Bulan","view.day":"Hari","day.backMonth":"‹ Bulan","day.empty":"Belum ada acara di tanggal ini. Klik untuk menambah.",
       "plans":"Rencana","day.back":"‹ Tahun","day.addTitle":"Klik untuk menambah acara di tanggal ini","day.notes":"Catatan bulanan","day.notesPh":"Tulis catatan untuk bulan ini...","day.count":"Rencana bulan","event.startDay":"Tanggal mulai (opsional)","event.endDay":"Tanggal selesai (opsional)","plan.placeholder":"Tambah rencana baru...","plan.add":"Tambah rencana","hint":"Seret rencana ke kalender untuk menambah acara baru.",
       "settings":"Pengaturan","today":"Hari ini","event.addBtn":"+ Tambah acara","summary":"Ringkasan","close":"Tutup",
       "event.add":"Tambah acara","event.edit":"Ubah acara","event.title":"Nama acara","event.titlePh":"mis. Rapat tahunan",
@@ -756,9 +841,12 @@ try{
       "amountPh":"mis. 1500000, -500000, atau @-2000 (bulanan)","amountPhDec":"mis. 1500{d}50, -500{d}25, atau @-20{d}5 (bulanan)",
       "planAmountPh":"mis. 1500000 atau -500000","planAmountPhDec":"mis. 1500{d}50 atau -500{d}25",
       "note":"Catatan","event.notePh":"Tambahkan catatan untuk acara ini...","event.delete":"Hapus acara","cancel":"Batal","save":"Simpan",
-      "task.title":"Tugas harian","task.count":"Jumlah tugas harian","task.notePh":"Tulis catatan untuk bulan ini...",
-      "task.one":"{n} tugas harian","task.many":"{n} tugas harian",
+      "event.allDay":"Sepanjang hari","event.startTime":"Waktu mulai","event.endTime":"Waktu selesai","day.allDay":"Sepanjang hari","day.addTimeTitle":"Klik untuk menambah acara di jam ini",
+      "task.title":"Rencana harian","task.count":"Jumlah rencana harian","task.notePh":"Tulis catatan untuk bulan ini...",
+      "task.one":"{n} rencana harian","task.many":"{n} rencana harian",
       "task.hasNote":"Ada catatan — klik untuk membuka tampilan harian","task.edit":"Klik untuk membuka tampilan harian",
+      "month.timedPlan":"Rencana berwaktu","month.allMonth":"Sepanjang bulan","year.wholeYear":"Sepanjang tahun",
+      "timed.one":"{n} rencana berwaktu","timed.many":"{n} rencana berwaktu","timed.none":"Belum ada rencana berwaktu","timed.edit":"Klik untuk membuka tampilan harian",
       "plan.edit":"Ubah rencana","plan.name":"Nama rencana","plan.namePh":"mis. Kursus mengemudi","plan.notePh":"Tambahkan catatan untuk rencana ini...",
       "plan.delete":"Hapus rencana","plan.empty":"Belum ada rencana. Tambahkan lewat kolom di atas.",
       "plan.hasInfo":"Ada catatan/nominal — klik dua kali untuk melihat atau mengubah","plan.noInfo":"Klik dua kali untuk menambah catatan atau nominal",
@@ -783,7 +871,9 @@ try{
 
   let S = Object.assign({}, DEFAULT_SETTINGS);      // current settings (bound to the store below)
   let MONTHS = MONTH_NAMES.en;
-  let dayMonth = null;   // null = year view, 1..12 = daily view of that month
+  let dayMonth = null;   // null = year view, 1..12 = month/day view of that month
+  let viewDay = null;    // null = month view (list of all days), 1..n = single-day view focused on that date
+  function getViewMode(){ return dayMonth == null ? "year" : (viewDay != null ? "day" : "month"); }
 
   function t(key, vars){
     let str = (I18N[S.lang] && I18N[S.lang][key]);
@@ -831,6 +921,7 @@ try{
   const now = new Date();
   const REAL_YEAR = now.getFullYear();
   const REAL_MONTH = now.getMonth()+1;
+  const REAL_DAY = now.getDate();
 
   function defaultYearData(){
     return { tasks:{1:1,2:1,3:1,4:1,5:0,6:1,7:1,8:1,9:5,10:1,11:4,12:1}, events:[], taskNotes:{} };
@@ -871,6 +962,11 @@ try{
     D(["Pay electricity","Bayar listrik"], "tomato", 12, 12, { amount:-450000, done:true });
     D(["Payday","Gajian"], "basil", 25, 25, { amount:15000000 });
     D(["Deadline","Tenggat"], "banana", 28, 30, { note:L(["Ends on the last day of the month","Berakhir di akhir bulan"]) });
+    // timed cards on today's date: open Day mode and click a specific day to see the hourly grid
+    D(["Gym","Olahraga"], "sage", REAL_DAY, REAL_DAY, { startTime:"06:00", endTime:"07:00" });
+    D(["Client call","Telepon klien"], "peacock", REAL_DAY, REAL_DAY, { startTime:"10:00", endTime:"11:00", note:L(["Open this day to see the hourly grid — drag to move, drag the bottom edge to resize","Buka tanggal ini untuk melihat grid per jam — tarik untuk memindah, tarik tepi bawah untuk mengubah durasi"]) });
+    D(["Design sync","Sinkronisasi desain"], "lavender", REAL_DAY, REAL_DAY, { startTime:"10:30", endTime:"11:30", note:L(["Overlapping times sit side by side, just like overlapping days","Waktu yang bersamaan ditaruh berdampingan, seperti hari yang bersamaan"]) });
+    D(["Dinner","Makan malam"], "tangerine", REAL_DAY, REAL_DAY, { startTime:"19:00", endTime:"20:30" });
 
     // plans: yearly list
     P(["Driving lessons","Kursus mengemudi"], "sage", "year");
@@ -1272,12 +1368,26 @@ try{
     document.getElementById("fDone").checked = !!(prefill && prefill.done);
     document.getElementById("fAmount").value = (prefill && prefill.amount != null) ? ((prefill.recurring ? "@" : "") + amountToInput(prefill.amount)) : "";
     setSelectedColor(prefill && prefill.color || "sage");
+    document.getElementById("allDayRow").style.display = modalScope === "day" ? "" : "none";
+    const fAllDay = document.getElementById("fAllDay");
+    const hasTime = !!(prefill && prefill.startTime);
+    fAllDay.checked = !hasTime;
+    document.getElementById("fStartTime").value = (prefill && prefill.startTime) || "09:00";
+    document.getElementById("fEndTime").value = (prefill && prefill.endTime) || "10:00";
+    document.getElementById("timeFieldsRow").style.display = (modalScope === "day" && hasTime) ? "" : "none";
     overlay.classList.add("open");
     document.getElementById("fTitle").focus();
   }
+  document.getElementById("fAllDay").addEventListener("change", function(){
+    document.getElementById("timeFieldsRow").style.display = this.checked ? "none" : "";
+  });
   function closeModal(){ overlay.classList.remove("open"); }
 
-  document.getElementById("addBtn").addEventListener("click", ()=> openModal());
+  document.getElementById("addBtn").addEventListener("click", ()=>{
+    // in Day mode, default a new event to the date currently being viewed
+    if(viewDay != null) openModal({startMonth:dayMonth, endMonth:dayMonth, startDay:viewDay, endDay:viewDay});
+    else openModal();
+  });
   document.getElementById("cancelBtn").addEventListener("click", closeModal);
   overlay.addEventListener("click", (e)=>{ if(e.target === overlay) closeModal(); });
 
@@ -1304,12 +1414,23 @@ try{
     const isRecurring = amountInput.startsWith("@");
     const amount = parseAmount(isRecurring ? amountInput.slice(1) : amountInput);
     const recurring = amount != null && isRecurring;
+    // optional time-of-day (day-scope only, hourly grid)
+    let startTime = null, endTime = null;
+    if(modalScope === "day" && !document.getElementById("fAllDay").checked){
+      const sMin = timeToMin(document.getElementById("fStartTime").value);
+      let eMin = timeToMin(document.getElementById("fEndTime").value);
+      if(sMin != null){
+        if(eMin == null || eMin <= sMin) eMin = sMin + 30;
+        startTime = minToTime(sMin);
+        endTime = minToTime(eMin);
+      }
+    }
     const yd = getYearData(store.currentYear);
     if(editingId){
       const ev = yd.events.find(e=>e.id===editingId);
-      if(ev){ ev.title=title; ev.startMonth=start; ev.endMonth=end; ev.color=selectedColor; ev.note=note; ev.amount=amount; ev.recurring=recurring; ev.startDay=startDay; ev.endDay=endDay; ev.done=document.getElementById("fDone").checked; }
+      if(ev){ ev.title=title; ev.startMonth=start; ev.endMonth=end; ev.color=selectedColor; ev.note=note; ev.amount=amount; ev.recurring=recurring; ev.startDay=startDay; ev.endDay=endDay; ev.done=document.getElementById("fDone").checked; ev.startTime=startTime; ev.endTime=endTime; }
     } else {
-      yd.events.push({ id:"e"+Date.now(), title, color:selectedColor, startMonth:start, endMonth:end, startDay, endDay, note, amount, recurring, scope:modalScope, done:document.getElementById("fDone").checked });
+      yd.events.push({ id:"e"+Date.now(), title, color:selectedColor, startMonth:start, endMonth:end, startDay, endDay, note, amount, recurring, scope:modalScope, done:document.getElementById("fDone").checked, startTime, endTime });
     }
     saveStore(); closeModal(); render();
   });
@@ -1325,27 +1446,66 @@ try{
   const yearTitle = document.getElementById("yearTitle");
   const backBtn = document.getElementById("backBtn");
   function daysInMonth(y, m){ return new Date(y, m, 0).getDate(); }
+  // ---------- time helpers (for the hourly single-day grid) ----------
+  function pad2(n){ return String(n).padStart(2, "0"); }
+  function timeToMin(str){
+    if(!str) return null;
+    const parts = str.split(":");
+    const h = parseInt(parts[0], 10), mnt = parseInt(parts[1], 10) || 0;
+    if(isNaN(h)) return null;
+    return h * 60 + mnt;
+  }
+  function minToTime(min){
+    min = Math.max(0, Math.min(24 * 60 - 1, Math.round(min)));
+    return pad2(Math.floor(min / 60)) + ":" + pad2(min % 60);
+  }
   function shiftMonth(delta){
     let m = dayMonth + delta, y = store.currentYear;
     if(m < 1){ m = 12; y--; } else if(m > 12){ m = 1; y++; }
     dayMonth = m; store.currentYear = y; saveStore(); render();
   }
-  function openDay(m){ dayMonth = m; window.scrollTo({top:0}); render(); }
+  function shiftDay(delta){
+    let y = store.currentYear, m = dayMonth, d = viewDay + delta;
+    let n = daysInMonth(y, m);
+    while(d < 1){ m--; if(m < 1){ m = 12; y--; } n = daysInMonth(y, m); d += n; }
+    while(d > n){ d -= n; m++; if(m > 12){ m = 1; y++; } n = daysInMonth(y, m); }
+    store.currentYear = y; dayMonth = m; viewDay = d; saveStore(); render();
+  }
+  function openDay(m){ dayMonth = m; viewDay = null; window.scrollTo({top:0}); render(); }
   function closeDay(){
-    const m = dayMonth; dayMonth = null; render();
+    if(viewDay != null){
+      // day view -> back to month view, same month
+      viewDay = null; saveStore(); render();
+      return;
+    }
+    const m = dayMonth; dayMonth = null; saveStore(); render();
     setTimeout(()=>{
       const row = document.querySelector('.row-line[data-row="'+m+'"]');
       if(row) row.scrollIntoView({block:"center"});
     }, 30);
   }
   backBtn.addEventListener("click", closeDay);
-  document.getElementById("prevYear").addEventListener("click", ()=>{ if(dayMonth != null){ shiftMonth(-1); return; } store.currentYear--; saveStore(); render(); });
-  document.getElementById("nextYear").addEventListener("click", ()=>{ if(dayMonth != null){ shiftMonth(1); return; } store.currentYear++; saveStore(); render(); });
-  // "Today": from the year view or the daily view, jump to today's date in the daily view
+  document.getElementById("prevYear").addEventListener("click", ()=>{
+    const mode = getViewMode();
+    if(mode === "day"){ shiftDay(-1); return; }
+    if(mode === "month"){ shiftMonth(-1); return; }
+    store.currentYear--; saveStore(); render();
+  });
+  document.getElementById("nextYear").addEventListener("click", ()=>{
+    const mode = getViewMode();
+    if(mode === "day"){ shiftDay(1); return; }
+    if(mode === "month"){ shiftMonth(1); return; }
+    store.currentYear++; saveStore(); render();
+  });
+  // "Today": jumps to today's date, staying in the current view mode (month view scrolls
+  // to today's row; day view switches straight to today; year view moves to the month view)
   document.getElementById("todayBtn").addEventListener("click", ()=>{
     const nowD = new Date();
     const y = nowD.getFullYear(), m = nowD.getMonth() + 1, d = nowD.getDate();
-    store.currentYear = y; dayMonth = m; saveStore(); render();
+    const wasDayMode = viewDay != null;
+    store.currentYear = y; dayMonth = m; viewDay = wasDayMode ? d : null;
+    saveStore(); render();
+    if(wasDayMode) return;
     setTimeout(()=>{
       const row = document.querySelector('.grid.day .row-line[data-row="' + d + '"]');
       if(!row) return;
@@ -1354,6 +1514,152 @@ try{
       setTimeout(()=>row.classList.remove("today"), 1600);
     }, 30);
   });
+
+  // ---------- view mode slider: Year | Month | Day ----------
+  let viewModeBtns = [];
+  function setViewMode(mode){
+    if(mode === "year"){
+      dayMonth = null; viewDay = null;
+    } else if(mode === "month"){
+      if(dayMonth == null) dayMonth = (store.currentYear === REAL_YEAR) ? REAL_MONTH : 1;
+      viewDay = null;
+    } else if(mode === "day"){
+      if(dayMonth == null) dayMonth = (store.currentYear === REAL_YEAR) ? REAL_MONTH : 1;
+      const n = daysInMonth(store.currentYear, dayMonth);
+      if(viewDay == null) viewDay = (store.currentYear === REAL_YEAR && dayMonth === REAL_MONTH) ? Math.min(REAL_DAY, n) : 1;
+      else viewDay = Math.min(viewDay, n);
+    }
+    saveStore(); window.scrollTo({top:0}); render();
+  }
+  let viewModeThumb = null;
+  let dragState = null;
+  let justDragged = false;
+  let dragRaf = null;
+  let resizeRaf = null;
+
+  function buildViewModeSeg(){
+    const el = document.getElementById("viewModeSeg");
+    el.setAttribute("role", "tablist");
+    el.setAttribute("aria-label", t("view.label") || "View mode");
+    el.innerHTML = "";
+    viewModeThumb = document.createElement("div");
+    viewModeThumb.className = "view-thumb";
+    el.appendChild(viewModeThumb);
+    viewModeBtns = ["year","month","day"].map(k=>{
+      const b = document.createElement("button");
+      b.type = "button"; b.dataset.key = k;
+      b.setAttribute("role", "tab");
+      b.addEventListener("click", ()=>{ if(justDragged) return; setViewMode(k); });
+      el.appendChild(b);
+      return b;
+    });
+    const labelEl = document.getElementById("viewModeLabel");
+    if(labelEl) labelEl.textContent = t("view.label") || labelEl.textContent;
+  }
+
+  function updateViewModeSeg(skipAnim){
+    const cur = getViewMode();
+    let activeBtn = null;
+    viewModeBtns.forEach(b=>{
+      b.textContent = t("view." + b.dataset.key);
+      const on = b.dataset.key === cur;
+      b.classList.toggle("on", on);
+      b.setAttribute("aria-selected", on ? "true" : "false");
+      b.setAttribute("tabindex", on ? "0" : "-1");
+      if(on) activeBtn = b;
+    });
+
+    // give every button the same width = the "month" button's natural width x1.5, computed once
+    const seg = document.getElementById("viewModeSeg");
+    if(!seg.dataset.widthLocked){
+      const monthBtn = viewModeBtns.find(b=>b.dataset.key === "month");
+      if(monthBtn){
+        monthBtn.style.width = "auto";
+        const baseWidth = monthBtn.getBoundingClientRect().width;
+        const targetWidth = Math.ceil(baseWidth * 1.5);
+        viewModeBtns.forEach(b=>{ b.style.width = targetWidth + "px"; });
+        const segPadding = 4, gap = 6, count = viewModeBtns.length;
+        const frameWidth = (targetWidth * count) + (gap * (count - 1)) + (segPadding * 2);
+        seg.style.width = frameWidth + "px";
+        seg.dataset.widthLocked = "1";
+      }
+    }
+
+    if(viewModeThumb && activeBtn){
+      if(skipAnim) viewModeThumb.style.transition = "none";
+      const segRect = seg.getBoundingClientRect();
+      const btnRect = activeBtn.getBoundingClientRect();
+      const relativeLeft = btnRect.left - segRect.left;
+      viewModeThumb.style.width = btnRect.width + "px";
+      viewModeThumb.style.transform = "translateX(" + relativeLeft + "px)";
+      if(skipAnim){
+        viewModeThumb.offsetHeight; // force reflow so the "none" transition actually applies
+        viewModeThumb.style.transition = "";
+      }
+    }
+  }
+
+  function getSegMetrics(){
+    const seg = document.getElementById("viewModeSeg");
+    const segRect = seg.getBoundingClientRect();
+    const items = viewModeBtns.map(b=>{
+      const r = b.getBoundingClientRect();
+      return { key: b.dataset.key, left: r.left - segRect.left, width: r.width };
+    });
+    return { seg, segRect, items };
+  }
+
+  function onSegPointerDown(e){
+    if(e.button !== undefined && e.button !== 0) return;
+    const { seg, items } = getSegMetrics();
+    const current = items.find(i => i.key === getViewMode()) || items[0];
+    dragState = { startX: e.clientX, startLeft: current.left, items, minLeft: 0, maxLeft: seg.clientWidth - current.width };
+    justDragged = false;
+    viewModeThumb.classList.add("dragging");
+    document.body.style.cursor = "grabbing";
+    document.addEventListener("pointermove", onSegPointerMove);
+    document.addEventListener("pointerup", onSegPointerUp, { once:true });
+  }
+
+  function onSegPointerMove(e){
+    if(!dragState) return;
+    const dx = e.clientX - dragState.startX;
+    if(Math.abs(dx) > 4) justDragged = true;
+    if(!justDragged) return;
+    if(dragRaf) return;
+    dragRaf = requestAnimationFrame(()=>{
+      dragRaf = null;
+      let newLeft = dragState.startLeft + dx;
+      newLeft = Math.max(dragState.minLeft, Math.min(dragState.maxLeft, newLeft));
+      viewModeThumb.style.transform = "translateX(" + newLeft + "px)";
+    });
+  }
+
+  function onSegPointerUp(e){
+    document.removeEventListener("pointermove", onSegPointerMove);
+    if(dragRaf){ cancelAnimationFrame(dragRaf); dragRaf = null; }
+    viewModeThumb.classList.remove("dragging");
+    document.body.style.cursor = "";
+    if(dragState && justDragged){
+      const dx = e.clientX - dragState.startX;
+      let newLeft = dragState.startLeft + dx;
+      newLeft = Math.max(dragState.minLeft, Math.min(dragState.maxLeft, newLeft));
+      const thumbWidth = viewModeThumb.getBoundingClientRect().width;
+      const thumbCenter = newLeft + thumbWidth / 2;
+      let nearest = dragState.items[0], nearestDist = Infinity;
+      dragState.items.forEach(it=>{
+        const itemCenter = it.left + it.width / 2;
+        const dist = Math.abs(itemCenter - thumbCenter);
+        if(dist < nearestDist){ nearestDist = dist; nearest = it; }
+      });
+      setViewMode(nearest.key);
+    }
+    dragState = null;
+    setTimeout(()=>{ justDragged = false; }, 0);
+  }
+
+  document.getElementById("viewModeSeg").addEventListener("pointerdown", onSegPointerDown);
+
 
   // ---------- add / remove plan ----------
   // the sidebar shows a separate plan list for the yearly view and for the daily view
@@ -1577,9 +1883,16 @@ try{
             dropIndicator.remove();
             pendingTargetId = undefined;
           }
-          if(insideGrid(moveEvt.clientX, moveEvt.clientY)){
-            const rowEl = findRowAtY(moveEvt.clientY);
-            if(rowEl) rowEl.classList.add('drop-target');
+          const wyStrip = findWholeYearStripAt(moveEvt.clientX, moveEvt.clientY);
+          if(wyStrip){
+            wyStrip.classList.add('drop-target');
+          } else {
+            const recapEl = document.getElementById('wholeYearRecap');
+            if(recapEl) recapEl.classList.remove('drop-target');
+            if(insideGrid(moveEvt.clientX, moveEvt.clientY)){
+              const rowEl = findRowAtY(moveEvt.clientY);
+              if(rowEl) rowEl.classList.add('drop-target');
+            }
           }
         }
       }
@@ -1588,6 +1901,8 @@ try{
         document.removeEventListener('pointermove', onMove);
         document.removeEventListener('pointerup', onUp);
         document.querySelectorAll('.row-line.drop-target').forEach(r=>r.classList.remove('drop-target'));
+        const recapEl = document.getElementById('wholeYearRecap');
+        if(recapEl) recapEl.classList.remove('drop-target');
         if(ghost) ghost.remove();
         if(dropIndicator && dropIndicator.parentNode) dropIndicator.remove();
         clearTimeout(holdTimer);
@@ -1596,6 +1911,17 @@ try{
 
         if(!dragging){
           openPlanModal(plan);
+          return;
+        }
+
+        const wyStrip = findWholeYearStripAt(upEvt.clientX, upEvt.clientY);
+        if(wyStrip){
+          const yd = getYearData(store.currentYear);
+          const newEvent = { id:"e"+Date.now(), title:plan.name, color:plan.color, startMonth:1, endMonth:12, note:plan.note||"", amount:plan.amount!=null?plan.amount:null, scope:"year" };
+          yd.events.push(newEvent);
+          store.plans = store.plans.filter(p => p.id !== plan.id);
+          saveStore();
+          render();
           return;
         }
 
@@ -1776,6 +2102,16 @@ try{
   document.getElementById("recapCloseBtn").addEventListener("click", ()=> setRecapOpen(false));
 
   // ---------- drag helpers ----------
+  // the "Whole year" recap strip (year view only) doubles as a drop zone: dropping
+  // a card there creates/turns it into an event spanning the full year (Jan–Dec)
+  function findWholeYearStripAt(x,y){
+    if(dayMonth != null) return null; // year view only — the month view's "All-month" strip is a separate, unrelated element
+    const strip = document.getElementById('wholeYearRecap');
+    if(!strip) return null;
+    const r = strip.getBoundingClientRect();
+    return (x>=r.left && x<=r.right && y>=r.top && y<=r.bottom) ? strip : null;
+  }
+
   function findRowAtY(y){
     const rows = Array.from(document.querySelectorAll('.row-line'));
     if(rows.length===0) return null;
@@ -1805,6 +2141,7 @@ try{
       if(i>=2) slotBounds.push([left,right]); // event slot columns are index 2..5
       cursor = right + gap;
     }
+    if(slotBounds.length === 0) return null; // grid isn't in column layout right now (e.g. single-day view)
     for(let i=0;i<slotBounds.length;i++){
       if(x >= slotBounds[i][0] && x <= slotBounds[i][1]) return i;
     }
@@ -1889,9 +2226,16 @@ try{
             showIndicatorAt(moveEvt.clientY);
           } else {
             clearIndicator();
-            if(insideGrid(moveEvt.clientX, moveEvt.clientY)){
-              const rowEl = findRowAtY(moveEvt.clientY);
-              if(rowEl) rowEl.classList.add('drop-target');
+            const wyStrip = findWholeYearStripAt(moveEvt.clientX, moveEvt.clientY);
+            if(wyStrip){
+              wyStrip.classList.add('drop-target');
+            } else {
+              const recapEl = document.getElementById('wholeYearRecap');
+              if(recapEl) recapEl.classList.remove('drop-target');
+              if(insideGrid(moveEvt.clientX, moveEvt.clientY)){
+                const rowEl = findRowAtY(moveEvt.clientY);
+                if(rowEl) rowEl.classList.add('drop-target');
+              }
             }
           }
         }
@@ -1901,6 +2245,8 @@ try{
         document.removeEventListener('pointermove', onMove);
         document.removeEventListener('pointerup', onUp);
         document.querySelectorAll('.row-line.drop-target').forEach(r=>r.classList.remove('drop-target'));
+        const recapEl = document.getElementById('wholeYearRecap');
+        if(recapEl) recapEl.classList.remove('drop-target');
         document.querySelector('.sidebar').classList.remove('drag-over');
         if(dropIndicator && dropIndicator.parentNode) dropIndicator.remove();
         if(ghost) ghost.remove();
@@ -1914,6 +2260,15 @@ try{
         }
 
         const yd = getYearData(store.currentYear);
+
+        const wyStrip = findWholeYearStripAt(upEvt.clientX, upEvt.clientY);
+        if(wyStrip){
+          ev.startMonth = 1; ev.endMonth = 12;
+          delete ev.preferredSlot;
+          saveStore();
+          render();
+          return;
+        }
 
         if(insideSidebar(upEvt.clientX, upEvt.clientY)){
           // dropped into the sidebar: turn this card into a saved plan, remove it from the calendar,
@@ -2039,6 +2394,115 @@ try{
     return b;
   }
 
+  // ---------- daily view: drag a card to move it between days ----------
+  function attachDayDrag(el, ev, m, n){
+    el.addEventListener('pointerdown', function(downEvt){
+      if(downEvt.button !== 0) return;
+      const startX = downEvt.clientX, startY = downEvt.clientY;
+      let dragging = false;
+      let ghost = null;
+
+      const holdTimer = setTimeout(()=>{
+        el.classList.add('holding');
+      }, 350);
+
+      function insideSidebar(x,y){
+        const r = document.querySelector('.sidebar').getBoundingClientRect();
+        return x>=r.left && x<=r.right && y>=r.top && y<=r.bottom;
+      }
+      function insideGrid(x,y){
+        const r = document.getElementById('grid').getBoundingClientRect();
+        return x>=r.left && x<=r.right && y>=r.top && y<=r.bottom;
+      }
+
+      function onMove(moveEvt){
+        const dx = moveEvt.clientX - startX;
+        const dy = moveEvt.clientY - startY;
+        if(!dragging && (Math.abs(dx) > 6 || Math.abs(dy) > 6)){
+          dragging = true;
+          clearTimeout(holdTimer);
+          el.classList.remove('holding');
+          el.style.opacity = '0';
+          ghost = document.createElement('div');
+          ghost.className = 'event dragging plan-ghost-card ' + ev.color;
+          ghost.textContent = ev.title;
+          document.body.appendChild(ghost);
+        }
+        if(dragging && ghost){
+          ghost.style.left = moveEvt.clientX + 'px';
+          ghost.style.top = moveEvt.clientY + 'px';
+
+          const overSidebar = insideSidebar(moveEvt.clientX, moveEvt.clientY);
+          document.querySelector('.sidebar').classList.toggle('drag-over', overSidebar);
+
+          document.querySelectorAll('.row-line.drop-target').forEach(r=>r.classList.remove('drop-target'));
+          if(!overSidebar && insideGrid(moveEvt.clientX, moveEvt.clientY)){
+            const rowEl = findRowAtY(moveEvt.clientY);
+            if(rowEl) rowEl.classList.add('drop-target');
+          }
+        }
+      }
+
+      function onUp(upEvt){
+        document.removeEventListener('pointermove', onMove);
+        document.removeEventListener('pointerup', onUp);
+        document.querySelectorAll('.row-line.drop-target').forEach(r=>r.classList.remove('drop-target'));
+        document.querySelector('.sidebar').classList.remove('drag-over');
+        if(ghost) ghost.remove();
+        clearTimeout(holdTimer);
+        el.classList.remove('holding');
+        el.style.opacity = '';
+
+        if(!dragging){
+          openModal(ev);
+          return;
+        }
+
+        const yd = getYearData(store.currentYear);
+
+        if(insideSidebar(upEvt.clientX, upEvt.clientY)){
+          // dropped into the sidebar: turn this card into a saved plan, remove it from the calendar
+          const existingPlan = store.plans.find(p => p.scope === curScope() && p.name.toLowerCase() === ev.title.toLowerCase());
+          if(!existingPlan){
+            const newPlan = { id:"p"+Date.now(), name:ev.title, color:ev.color, note:ev.note||"", amount:ev.amount!=null?ev.amount:null, scope:curScope() };
+            store.plans.push(newPlan);
+          } else {
+            if(ev.note) existingPlan.note = ev.note;
+            if(ev.amount != null) existingPlan.amount = ev.amount;
+          }
+          yd.events = yd.events.filter(e => e.id !== ev.id);
+          saveStore();
+          render();
+          return;
+        }
+
+        const originRowEl = findRowAtY(startY);
+        const targetRowEl = findRowAtY(upEvt.clientY);
+        if(originRowEl && targetRowEl){
+          const originRow = parseInt(originRowEl.dataset.row, 10);
+          const targetRow = parseInt(targetRowEl.dataset.row, 10);
+          const delta = targetRow - originRow;
+          const sd = ev.startDay ? Math.min(ev.startDay, n) : 1;
+          const ed = ev.endDay ? Math.min(ev.endDay, n) : n;
+          const duration = ed - sd;
+          let newStart = sd + delta;
+          newStart = Math.max(1, Math.min(n - duration, newStart));
+          if(!ev.startDay || !ev.endDay || newStart !== sd){
+            ev.startDay = newStart;
+            ev.endDay = newStart + duration;
+            ev.startMonth = m; ev.endMonth = m;
+          }
+        }
+
+        saveStore();
+        render();
+      }
+
+      document.addEventListener('pointermove', onMove);
+      document.addEventListener('pointerup', onUp);
+    });
+  }
+
   // ---------- daily view: resize a card downwards (changes its end day) ----------
   let justResized = false;
   function attachDayResize(el, ev, m, n){
@@ -2092,9 +2556,11 @@ try{
     const grid = document.getElementById("grid");
     yearTitle.textContent = MONTHS[m-1] + " " + y;
     backBtn.style.display = "";
+    backBtn.textContent = t("day.back");
     const oldBanner = document.getElementById("conflictBanner");
     if(oldBanner) oldBanner.remove();
     grid.innerHTML = "";
+    grid.classList.remove("single-day");
     grid.classList.add("day");
     renderPlanList();
     if(recapOpen) renderRecap();
@@ -2109,7 +2575,9 @@ try{
       const sd = (ev.startMonth === m && ev.startDay) ? Math.min(ev.startDay, n) : 1;
       let ed = (ev.endMonth === m && ev.endDay) ? Math.min(ev.endDay, n) : n;
       if(ed < sd) ed = sd;
-      items.push({ev, sd, ed, idx});
+      // a plan only carries a time when it's pinned to exactly this one day (matches the daily view's rule)
+      const timed = sd === ed && ev.startTime;
+      items.push({ev, sd, ed, idx, timed});
     });
     items.sort((a,b)=> a.sd - b.sd || (b.ed - b.sd) - (a.ed - a.sd) || a.idx - b.idx);
     const slotEnd = [];
@@ -2121,6 +2589,9 @@ try{
     const K = Math.max(6, slotEnd.length);
     grid.style.setProperty("--slots", K);
 
+    // row 1 is reserved for the "All-month" recap strip, so every day row sits one line lower
+    const ROW0 = 1;
+
     const wdFmt = new Intl.DateTimeFormat(S.lang === "id" ? "id-ID" : "en-US", {weekday:"short"});
     const today = new Date();
     const isThisMonth = (today.getFullYear() === y && today.getMonth() + 1 === m);
@@ -2130,26 +2601,71 @@ try{
       const isToday = isThisMonth && today.getDate() === d;
       const line = document.createElement("div");
       line.className = "row-line" + (isToday ? " current-month" : "") + ((dow === 0 || dow === 6) ? " weekend" : "");
-      line.style.gridRow = d; line.style.gridColumn = "1 / " + (2 + K);
+      line.style.gridRow = ROW0 + d; line.style.gridColumn = "1 / " + (3 + K);
       line.dataset.row = d;
       grid.appendChild(line);
 
       const label = document.createElement("div");
       label.className = "day-label" + (isToday ? " is-today" : "");
-      label.style.gridRow = d; label.style.gridColumn = 1;
+      label.style.gridRow = ROW0 + d; label.style.gridColumn = 1;
       label.innerHTML = "<span class='d-num'>" + d + "</span><span class='d-name'>" + wdFmt.format(dt) + "</span>";
       label.title = t("day.addTitle");
       label.addEventListener("click", ()=> openModal({startMonth:m, endMonth:m, startDay:d, endDay:d}));
       labels.push(label);
+
+      // "Timed Plan" chip for this day — same look/behaviour as the year view's daily-plan
+      // chip, but scoped to a single day and to plans that carry a specific time
+      const dayTimedCount = items.filter(it=> it.sd === d && it.ed === d && it.timed).length;
+      const timedChipCell = document.createElement("div");
+      timedChipCell.className = "task-chip-cell";
+      timedChipCell.style.gridRow = ROW0 + d; timedChipCell.style.gridColumn = 2;
+      const timedChip = document.createElement("div");
+      timedChip.className = "task-chip";
+      timedChip.innerHTML = "<span>" + (dayTimedCount ? t(dayTimedCount === 1 ? "timed.one" : "timed.many", {n: dayTimedCount}) : t("timed.none")) + "</span>";
+      timedChip.title = t("timed.edit");
+      timedChip.addEventListener("click", ()=>{ viewDay = d; window.scrollTo({top:0}); render(); });
+      timedChipCell.appendChild(timedChip);
+      labels.push(timedChipCell);
     }
     labels.forEach(l=> grid.appendChild(l));
 
     // daily-task count (edited here; shown on the year chip)
     const dcWrap = document.getElementById("dayCountWrap");
     dcWrap.style.display = "flex";
-    const monthCards = yd.events.filter(e=> e.scope !== "day" && e.startMonth <= m && e.endMonth >= m);
+    const monthCards = yd.events.filter(e=> e.scope !== "day" && e.startMonth <= m && e.endMonth >= m && !(e.startMonth === 1 && e.endMonth === 12));
     const monthDone = monthCards.filter(e=> e.done).length;
     document.getElementById("dayCountVal").textContent = (monthDone ? monthDone + "/" : "") + monthCards.length;
+
+    // ---- "All-month" recap strip — lives inside the grid itself (row 1, spanning every
+    // column) so the calendar's top edge sits in the same place across Year/Month/Day ----
+    const recap = document.createElement("div");
+    recap.className = "month-recap-strip";
+    recap.id = "monthRecap";
+    recap.style.gridRow = 1; recap.style.gridColumn = "1 / -1";
+    const allMonthLabel = document.createElement("div");
+    allMonthLabel.className = "month-recap-label";
+    allMonthLabel.textContent = t("month.allMonth");
+    recap.appendChild(allMonthLabel);
+    if(monthCards.length){
+      const allMonthList = document.createElement("div");
+      allMonthList.className = "all-day-list";
+      monthCards.forEach(ev=>{
+        const chip = document.createElement("div");
+        chip.dataset.eventId = ev.id;
+        chip.className = "all-day-card " + ev.color + (ev.done ? " done" : "");
+        chip.textContent = ev.title;
+        chip.title = (ev.amount != null ? formatMoney(ev.amount) + (ev.recurring ? t("ev.perMonthTitle") : ". ") : "") + (ev.note ? t("ev.notePrefix") + ev.note : "");
+        chip.addEventListener("click", ()=> openModal(ev));
+        allMonthList.appendChild(chip);
+      });
+      recap.appendChild(allMonthList);
+    } else {
+      const empty = document.createElement("div");
+      empty.className = "month-recap-empty";
+      empty.textContent = "—";
+      recap.appendChild(empty);
+    }
+    grid.appendChild(recap);
 
     // event cards
     const mon = MONTHS[m-1].slice(0, 3);
@@ -2159,32 +2675,308 @@ try{
       el.dataset.eventId = ev.id;
       el.className = "event " + ev.color + " span" + (ev.amount != null ? " has-amount" : "") + (ev.done ? " done" : "");
       el.innerHTML = "<span class='ev-title'>" + escapeHtml(ev.title) + "</span>"
+        + (it.timed ? "<span class='time-preview'>" + ev.startTime + (ev.endTime ? "–" + ev.endTime : "") + "</span>" : "")
         + (ev.note ? "<span class='note-preview'>" + escapeHtml(ev.note) + "</span>" : "")
         + (ev.amount != null ? "<span class='amount-preview'>" + (ev.recurring ? "@" : "") + formatMoney(ev.amount) + (ev.recurring ? t("ev.perMonthShort") : "") + "</span>" : "");
       const range = it.sd === it.ed ? (it.sd + " " + mon) : (it.sd + "–" + it.ed + " " + mon);
       el.title = range + ". " + (ev.amount != null ? formatMoney(ev.amount) + (ev.recurring ? t("ev.perMonthTitle") : ". ") : "") + (ev.note ? t("ev.notePrefix") + ev.note : "");
-      el.style.gridRow = it.sd + " / " + (it.ed + 1);
-      el.style.gridColumn = 2 + it.slot;
-      el.addEventListener("click", (e)=>{ if(e.target.closest(".done-btn") || justResized) return; openModal(ev); });
+      el.style.gridRow = (ROW0 + it.sd) + " / " + (ROW0 + it.ed + 1);
+      el.style.gridColumn = 3 + it.slot;
+      attachDayDrag(el, ev, m, n);
       el.appendChild(buildDoneBtn(ev));
       attachDayResize(el, ev, m, n);
       grid.appendChild(el);
     });
   }
 
+  // ---------- daily view: a single specific date, hourly agenda grid ----------
+  const HOUR_H = 56; // px per hour row
+  function renderSingleDay(){
+    const y = store.currentYear, m = dayMonth, d = viewDay, n = daysInMonth(y, m);
+    const grid = document.getElementById("grid");
+    const dt = new Date(y, m-1, d);
+    const wdFmt = new Intl.DateTimeFormat(S.lang === "id" ? "id-ID" : "en-US", {weekday:"long"});
+    yearTitle.textContent = wdFmt.format(dt) + ", " + MONTHS[m-1] + " " + d + ", " + y;
+    backBtn.style.display = "";
+    backBtn.textContent = t("day.backMonth");
+    const oldBanner = document.getElementById("conflictBanner");
+    if(oldBanner) oldBanner.remove();
+    const oldRecap = document.getElementById("monthRecap");
+    if(oldRecap) oldRecap.remove();
+    grid.innerHTML = "";
+    grid.classList.remove("day");
+    grid.classList.add("single-day");
+    grid.style.removeProperty("--slots");
+    renderPlanList();
+    if(recapOpen) renderRecap();
+    const yd = getYearData(y);
+
+    // one invisible full-size row-line so plan-sidebar drag-and-drop (findRowAtY)
+    // keeps working the same way it does in the month view
+    const line = document.createElement("div");
+    line.className = "row-line";
+    line.dataset.row = d;
+    grid.appendChild(line);
+
+    const dcWrap = document.getElementById("dayCountWrap");
+    dcWrap.style.display = "flex";
+    const monthCards = yd.events.filter(e=> e.scope !== "day" && e.startMonth <= m && e.endMonth >= m && !(e.startMonth === 1 && e.endMonth === 12));
+    const monthDone = monthCards.filter(e=> e.done).length;
+    document.getElementById("dayCountVal").textContent = (monthDone ? monthDone + "/" : "") + monthCards.length;
+
+    const items = [];
+    yd.events.forEach((ev, idx)=>{
+      if(ev.scope !== "day") return;
+      if(S.hideDone && ev.done) return;
+      if(ev.startMonth > m || ev.endMonth < m) return;
+      const sd = (ev.startMonth === m && ev.startDay) ? Math.min(ev.startDay, n) : 1;
+      let ed = (ev.endMonth === m && ev.endDay) ? Math.min(ev.endDay, n) : n;
+      if(ed < sd) ed = sd;
+      if(d < sd || d > ed) return;
+      // an event only carries a time when it's pinned to exactly this one day
+      const timed = sd === ed && ev.startTime;
+      items.push({ev, idx, timed});
+    });
+    items.sort((a,b)=> a.idx - b.idx);
+
+    const inner = document.createElement("div");
+    inner.className = "day-view-inner";
+
+    // ---- all-day strip (untimed cards) ----
+    const allDayItems = items.filter(it=> !it.timed);
+    const strip = document.createElement("div");
+    strip.className = "all-day-strip";
+    strip.style.minHeight = HOUR_H + "px"; // same rhythm as one hour row below it
+    const stripLabel = document.createElement("div");
+    stripLabel.className = "all-day-label";
+    stripLabel.textContent = t("day.allDay");
+    strip.appendChild(stripLabel);
+    const stripList = document.createElement("div");
+    stripList.className = "all-day-list";
+    allDayItems.forEach(it=>{
+      const ev = it.ev;
+      const el = document.createElement("div");
+      el.dataset.eventId = ev.id;
+      el.className = "all-day-card " + ev.color + (ev.done ? " done" : "");
+      el.textContent = ev.title;
+      el.title = (ev.amount != null ? formatMoney(ev.amount) + (ev.recurring ? t("ev.perMonthTitle") : ". ") : "") + (ev.note ? t("ev.notePrefix") + ev.note : "");
+      el.addEventListener("click", ()=> openModal(ev));
+      stripList.appendChild(el);
+    });
+    strip.appendChild(stripList);
+    inner.appendChild(strip);
+
+    // ---- hourly grid (timed cards) ----
+    const hours = document.createElement("div");
+    hours.className = "day-hours";
+    hours.style.height = (24 * HOUR_H) + "px";
+    const hourFmt = new Intl.DateTimeFormat(S.lang === "id" ? "id-ID" : "en-US", {hour:"2-digit", minute:"2-digit", hour12:false});
+    for(let h = 0; h < 24; h++){
+      const row = document.createElement("div");
+      row.className = "hour-row";
+      row.style.top = (h * HOUR_H) + "px";
+      row.style.height = HOUR_H + "px";
+      row.title = t("day.addTimeTitle");
+      row.addEventListener("click", ()=> openModal({
+        startMonth:m, endMonth:m, startDay:d, endDay:d,
+        startTime: pad2(h) + ":00", endTime: pad2((h + 1) % 24) + ":00"
+      }));
+      hours.appendChild(row);
+
+      const lbl = document.createElement("div");
+      lbl.className = "hour-label";
+      lbl.style.top = (h * HOUR_H) + "px";
+      lbl.textContent = hourFmt.format(new Date(2000, 0, 1, h, 0));
+      hours.appendChild(lbl);
+    }
+
+    // current-time indicator, only when viewing today
+    const today = new Date();
+    if(today.getFullYear() === y && today.getMonth() + 1 === m && today.getDate() === d){
+      const nowLine = document.createElement("div");
+      nowLine.className = "now-line";
+      nowLine.style.top = ((today.getHours() * 60 + today.getMinutes()) / 60 * HOUR_H) + "px";
+      hours.appendChild(nowLine);
+    }
+
+    // timed cards, laid out side-by-side when they overlap
+    const timedItems = items.filter(it=> it.timed).map(it=>{
+      const sMin = timeToMin(it.ev.startTime);
+      let eMin = timeToMin(it.ev.endTime);
+      if(eMin == null || eMin <= sMin){ eMin = sMin + 30; it.ev.endTime = minToTime(eMin); } // normalize legacy/incomplete data
+      return Object.assign(it, { sMin, eMin });
+    }).sort((a,b)=> a.sMin - b.sMin || a.eMin - b.eMin);
+    let cluster = [], clusterEnd = -1;
+    const clusters = [];
+    timedItems.forEach(it=>{
+      if(cluster.length && it.sMin >= clusterEnd){ clusters.push(cluster); cluster = []; clusterEnd = -1; }
+      cluster.push(it); clusterEnd = Math.max(clusterEnd, it.eMin);
+    });
+    if(cluster.length) clusters.push(cluster);
+    clusters.forEach(cl=>{
+      const colEnds = [];
+      cl.forEach(it=>{
+        let ci = colEnds.findIndex(end=> end <= it.sMin);
+        if(ci === -1){ ci = colEnds.length; colEnds.push(0); }
+        colEnds[ci] = it.eMin;
+        it.col = ci;
+      });
+      cl.forEach(it=> it.cols = colEnds.length);
+    });
+    timedItems.forEach(it=>{
+      const ev = it.ev;
+      const el = document.createElement("div");
+      el.dataset.eventId = ev.id;
+      el.className = "event timed-card " + ev.color + (ev.amount != null ? " has-amount" : "") + (ev.done ? " done" : "");
+      el.style.top = (it.sMin / 60 * HOUR_H) + "px";
+      el.style.height = Math.max(20, (it.eMin - it.sMin) / 60 * HOUR_H) + "px";
+      el.style.left = "calc(" + (it.col / it.cols * 100) + "% + 2px)";
+      el.style.width = "calc(" + (100 / it.cols) + "% - 4px)";
+      el.innerHTML = "<span class='ev-title'>" + escapeHtml(ev.title) + "</span>"
+        + "<span class='time-preview'>" + ev.startTime + "–" + minToTime(it.eMin) + "</span>"
+        + (ev.amount != null ? "<span class='amount-preview'>" + (ev.recurring ? "@" : "") + formatMoney(ev.amount) + (ev.recurring ? t("ev.perMonthShort") : "") + "</span>" : "");
+      el.title = ev.startTime + "–" + minToTime(it.eMin) + ". " + (ev.amount != null ? formatMoney(ev.amount) + (ev.recurring ? t("ev.perMonthTitle") : ". ") : "") + (ev.note ? t("ev.notePrefix") + ev.note : "");
+      attachTimedDrag(el, ev, hours);
+      el.appendChild(buildDoneBtn(ev));
+      attachTimedResize(el, ev, hours);
+      hours.appendChild(el);
+    });
+
+    inner.appendChild(hours);
+    grid.appendChild(inner);
+  }
+
+  // ---------- hourly view: drag a timed card to move it (changes its time) ----------
+  function attachTimedDrag(el, ev, hoursEl){
+    el.addEventListener('pointerdown', function(downEvt){
+      if(downEvt.button !== 0) return;
+      if(downEvt.target.closest(".resize-handle") || downEvt.target.closest(".done-btn")) return;
+      const startY = downEvt.clientY;
+      const origStart = timeToMin(ev.startTime);
+      const duration = timeToMin(ev.endTime) - origStart;
+      let dragging = false;
+      function onMove(moveEvt){
+        const dy = moveEvt.clientY - startY;
+        if(!dragging && Math.abs(dy) > 5){ dragging = true; el.classList.add('dragging'); }
+        if(!dragging) return;
+        const deltaMin = Math.round(dy / HOUR_H * 60 / 15) * 15;
+        let newStart = Math.max(0, Math.min(24 * 60 - duration, origStart + deltaMin));
+        el.style.top = (newStart / 60 * HOUR_H) + "px";
+        el.dataset.pendingStart = newStart;
+      }
+      function onUp(){
+        document.removeEventListener('pointermove', onMove);
+        document.removeEventListener('pointerup', onUp);
+        el.classList.remove('dragging');
+        if(dragging && el.dataset.pendingStart != null){
+          const newStart = parseInt(el.dataset.pendingStart, 10);
+          delete el.dataset.pendingStart;
+          ev.startTime = minToTime(newStart);
+          ev.endTime = minToTime(newStart + duration);
+          saveStore(); render();
+        }
+      }
+      document.addEventListener('pointermove', onMove);
+      document.addEventListener('pointerup', onUp);
+    });
+  }
+
+  // ---------- hourly view: resize a timed card's bottom edge (changes its end time) ----------
+  function attachTimedResize(el, ev, hoursEl){
+    const handle = document.createElement('div');
+    handle.className = 'resize-handle bottom';
+    el.appendChild(handle);
+    handle.addEventListener('click', (e)=> e.stopPropagation());
+    handle.addEventListener('pointerdown', function(downEvt){
+      if(downEvt.button !== 0) return;
+      downEvt.preventDefault();
+      downEvt.stopPropagation();
+      const startMin = timeToMin(ev.startTime);
+      let moved = false;
+      function onMove(moveEvt){
+        const rect = hoursEl.getBoundingClientRect();
+        const rawMin = (moveEvt.clientY - rect.top) / HOUR_H * 60;
+        const snapped = Math.round(rawMin / 15) * 15;
+        const newEnd = Math.max(startMin + 15, Math.min(24 * 60, snapped));
+        el.style.height = Math.max(20, (newEnd - startMin) / 60 * HOUR_H) + "px";
+        el.dataset.pendingEnd = newEnd;
+        moved = true;
+      }
+      function onUp(){
+        document.removeEventListener('pointermove', onMove);
+        document.removeEventListener('pointerup', onUp);
+        if(moved && el.dataset.pendingEnd != null){
+          ev.endTime = minToTime(parseInt(el.dataset.pendingEnd, 10));
+          delete el.dataset.pendingEnd;
+          saveStore(); render();
+        }
+      }
+      document.addEventListener('pointermove', onMove);
+      document.addEventListener('pointerup', onUp);
+    });
+  }
+
+  let lastRenderSig = null;
   function render(){
+    updateViewModeSeg();
+    const sig = getViewMode() + "|" + store.currentYear + "|" + dayMonth + "|" + viewDay;
+    const gridEl = document.getElementById("grid");
+    if(gridEl && lastRenderSig !== null && sig !== lastRenderSig && !reduceMotion){
+      gridEl.classList.add("nav-fade");
+      requestAnimationFrame(()=> requestAnimationFrame(()=> gridEl.classList.remove("nav-fade")));
+    }
+    lastRenderSig = sig;
+    if(dayMonth != null && viewDay != null){ renderSingleDay(); return; }
     if(dayMonth != null){ renderDay(); return; }
     backBtn.style.display = "none";
     document.getElementById("dayCountWrap").style.display = "none";
+    const oldRecap = document.getElementById("monthRecap");
+    if(oldRecap) oldRecap.remove();
     yearTitle.textContent = store.currentYear;
     const yAll = getYearData(store.currentYear);
-    const yd = { tasks: yAll.tasks, events: yAll.events.filter(e=> e.scope !== "day" && !(S.hideDone && e.done)) };   // yearly cards only (done ones can be hidden)
+    // events that span the entire year (Jan–Dec) get pulled out into their own
+    // "Whole year" recap instead of taking up a slot column in every month row
+    const wholeYearEvents = yAll.events.filter(e=> e.scope !== "day" && e.startMonth === 1 && e.endMonth === 12 && !(S.hideDone && e.done));
+    const yd = { tasks: yAll.tasks, events: yAll.events.filter(e=> e.scope !== "day" && !(S.hideDone && e.done) && !(e.startMonth === 1 && e.endMonth === 12)) };   // yearly cards only (done ones can be hidden)
     const grid = document.getElementById("grid");
     grid.classList.remove("day");
+    grid.classList.remove("single-day");
     grid.style.removeProperty("--slots");
     grid.innerHTML = "";
     renderPlanList();
     if(recapOpen) renderRecap();
+
+    // ---- "Whole year" recap strip — lives inside the grid itself (row 1, spanning
+    // every column), same as the "All-month" strip in the Month/Day view, so the
+    // calendar's top edge sits in the same place across Year/Month/Day ----
+    const wyStrip = document.createElement("div");
+    wyStrip.className = "month-recap-strip";
+    wyStrip.id = "wholeYearRecap";
+    wyStrip.style.gridRow = 1; wyStrip.style.gridColumn = "1 / -1";
+    const wyLabel = document.createElement("div");
+    wyLabel.className = "month-recap-label";
+    wyLabel.textContent = t("year.wholeYear");
+    wyStrip.appendChild(wyLabel);
+    if(wholeYearEvents.length){
+      const wyList = document.createElement("div");
+      wyList.className = "all-day-list";
+      wholeYearEvents.forEach(ev=>{
+        const chip = document.createElement("div");
+        chip.dataset.eventId = ev.id;
+        chip.className = "all-day-card " + ev.color + (ev.done ? " done" : "");
+        chip.textContent = ev.title;
+        chip.title = (ev.amount != null ? formatMoney(ev.amount) + (ev.recurring ? t("ev.perMonthTitle") : ". ") : "") + (ev.note ? t("ev.notePrefix") + ev.note : "");
+        chip.addEventListener("click", ()=> openModal(ev));
+        wyList.appendChild(chip);
+      });
+      wyStrip.appendChild(wyList);
+    } else {
+      const empty = document.createElement("div");
+      empty.className = "month-recap-empty";
+      empty.textContent = "—";
+      wyStrip.appendChild(empty);
+    }
+    grid.appendChild(wyStrip);
 
     // count how many events are active on each row, to know where we'll need
     // to reserve a slot for a "+N more" chip instead of overlapping
@@ -2265,7 +3057,7 @@ try{
     const animOpenRow = openAnimRow;   // month that was just opened (if any)
     const shadeFadeIn = [];            // shaded cards that should fade in
     const lineFor = {};
-    let lineCursor = 1;
+    let lineCursor = 2; // row 1 is reserved for the "Whole year" recap strip
     for(let r=1; r<=12; r++){
       lineFor[r] = lineCursor;
       lineCursor += expandedRows.has(r) ? 2 : 1;
@@ -2708,7 +3500,7 @@ try{
   const dlSkipBtn = document.getElementById("dlSkipBtn");
   if(dlConnectBtn) dlConnectBtn.addEventListener("click", ()=>{
     if(!driveTokenClient) return;
-    const status = document.getElementById("dlStatus");
+    const status = document.getElementById("dlStatus");s
     if(status) status.textContent = t("drive.landing.connecting");
     setDriveState("connecting");
     driveTokenClient.requestAccessToken({ prompt: "consent" });
@@ -2720,6 +3512,21 @@ try{
 
   waitForGIS(initDrive);
 
+  buildViewModeSeg();
+  updateViewModeSeg(true); // position the pill instantly on first paint, no slide-in
+  if(document.fonts && document.fonts.ready){
+    document.fonts.ready.then(()=> updateViewModeSeg(true));
+  }
+  window.addEventListener("resize", ()=>{
+    if(resizeRaf) cancelAnimationFrame(resizeRaf);
+    resizeRaf = requestAnimationFrame(()=>{
+      const seg = document.getElementById("viewModeSeg");
+      delete seg.dataset.widthLocked;
+      seg.style.width = "auto";
+      viewModeBtns.forEach(b=> b.style.width = "auto");
+      updateViewModeSeg(true);
+    });
+  });
   applyAppearance();
   applyStaticI18n();
   refreshSettingsUI();
