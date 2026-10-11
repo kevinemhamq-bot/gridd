@@ -1,4 +1,115 @@
 <!DOCTYPE html>
+<!--
+MOBILE MODE DOC (for AI / future edits)
+=====================================================================
+SCOPE  Phone mode = viewport <= 560px. Desktop/tablet layout is untouched.
+       Breakpoint appears in 3 places - change all together:
+       (1) CSS  @media (max-width:560px) block "MOBILE APP LAYOUT (HP)" (+ "COMPACT MODE" at its end)
+       (2) JS   const mqMobile = matchMedia("(max-width:560px)")
+       (3) JS   two inline matchMedia("(max-width:560px)") in setViewMode (default month/day)
+       Desktop defaults hide mobile-only nodes: ".cal-strip, .month-pop, .mob-feed, .brand-actions, .plan-plus{display:none}"
+      
+
+LAYOUT (top -> bottom)
+ 1. Sidebar strip: logo row [GRIDD ... Archive($) Summary profile]; .brand-actions holds Archive+Summary
+    (JS place() MOVES #archiveTopBtn/#recapBtn into it on phone and back into .top-actions on desktop).
+ 2. .plan-title-row = round #planPlusBtn (LEFT) + "UNSORTED PLANS" + chip #planFoldBtn ">" (RIGHT, folds/unfolds #planList via
+    .sidebar.plans-folded, in memory only). Tap + -> .add-plan (moved INTO the row by JS, absolute, clip-path reveal to the RIGHT
+    over the title + chip; opening it also unfolds the list). x closes, Enter/Esc/add closes. Plan colour markers: .swatch/.plan-badge
+    are display:none; .plan-item::before draws thin lines from ––mk-bg gradient set by setItemMarkers() (device-pixel aligned,
+    also ––mk-pad / ––mk-total).
+ 3. Sticky .topbar (top:0, or 40px with body.has-guest-banner): [title v | Today | < > ]. Title is tappable (#monthPop
+    month/year picker) in Month/Day modes. Day-mode title is short ("Sun, Oct 11").
+ 4. #calStrip = tab strip, content depends on mode (renderCalStrip):
+      Year : 12 month chips   -> feed = yearly cards of that month + link "N daily plans >" (opens Month view)
+      Month: day 1..N chips   -> feed = that day's cards, then "All month" section (yearly cards)
+      Day  : 24 hour chips 00:00-23:00 -> FILTER (not scroll): groups with label + line + status tag + fold chevron:
+             Still going (green, started earlier hour, still running) / On going (light blue, selected hour) /
+             Upcoming (yellow, next hour only). Empty groups hidden; all empty -> "Nothing planned"; all-day cards last.
+             Groups fold on tap (collapsedG by kind, in memory only).
+    Dots under chips: grey = has cards, blue = today.
+ 5. #mobFeed = vertical card list. Cards reuse class "event mcard <color>" (tap = openModal(ev); done circle = buildDoneBtn).
+    #grid is display:none !important on phone but STILL rendered by the original render code - do not delete it.
+ 6. Floating dock: #viewModeSeg (Year/Month/Day pill, position:fixed bottom) + #addBtn (round FAB, "+" via ::before,
+    text hidden with font-size:0). Sizes via :root vars ––fab ––dock-gap ––dock-side ––dock-bottom (inside the media block).
+    "+" prefill: window.__mobAddPrefill() (Year: month; Month: month+day; Day: existing logic).
+
+JS (one block inside the main IIFE, right before "const _renderBase = render" / final "render();")
+ - render is WRAPPED: render = function(){ _renderBase(); sync state; title; renderCalStrip(); renderFeed(); }
+ - state: mobMonth (Year tab), mobDay (Month tab), mobHour (Day tab; default = now hour on today else first timed event else 8),
+   collapsedG, popYear. Exposed for setViewMode: window.__mobMonth / window.__mobDay.
+ - data: evsForDay(y,m,d) (same rules as renderDay/renderSingleDay), yearCardsFor(y,m), dayPlanCount(y,m).
+ - UI text: MTXT {id,en} + mt(key,n); month/weekday names via dtf() (Intl, calLang()).
+ - ResizeObserver on #viewModeSeg re-measures the sliding thumb (updateViewModeSeg(true)).
+ - Day-nav (< >) in Day mode still moves by day (original handler); there is no day strip on phone.
+
+HP REWORK - CURRENT STATE (all CSS lives in the @media (max-width:560px) block; JS in the "mobile" IIFEs near the end)
+ - Header row: logo | Archive | Summary | profile. Archive + Summary = ICON ONLY (no box); profile = rounded square.
+   Sizes/gaps are CSS vars --hb(28 profile) --hi(21.6 icon box) --hg(6) --hr(10) --hx(2), rounded to whole device pixels in
+   setMarkerPx(). Never hardcode these px. #recapBtn has 2 svgs: .ic-dsk ($, desktop) and .ic-mob (coin, phone).
+ - Dividers: .sidebar > .brand border-bottom (logo | plans, full width) + .sidebar border-bottom 1px (plans | calendar).
+ - Plans row: [+ #planPlusBtn] [UNSORTED PLANS + .scope-chip (Year/Month/Day, margin-left:auto)] [#planFoldBtn chevron chip].
+   Fold = class .sidebar.plans-folded (memory only). Add field = ONE pill (left:0, padding-left 32px): rotated + (x) inside on
+   the left, #planAddBtn fills the full pill height on the right (its edge is the outline).
+ - Plan list: max 3 rows (JS sets #planList max-height = 3 x real row height), rest scrolls; ".plan-more" row = chevron only
+   (tap scrolls), shown only when >3 plans. .plan-item has touch-action:pan-y => touch drag-reorder is OFF on phone
+   (tap still opens the modal; pointercancel handled by bindPointerSession).
+ - Plan colour markers: setItemMarkers() always reserves the width of 3 lines (maxX) so all plan names start at the same x.
+ - Summary (finance) drawer: full-screen sheet; .recap-summary = grid (Net full width on top, Income/Expense side by side);
+   rows = 2-line grid (month | title | amount  /  note | saldo), thead hidden; "Saldo" label comes from data-lbl on .rsaldo
+   (set in renderRecap()).
+ - Tested with playwright: 390x780 @2.625, also 360 @3 and 412 @2.75.
+
+STYLE RULES
+ - Phone is COMPACT everywhere: edit the "COMPACT MODE" section at the end of the media block (it overrides earlier rules).
+ - Use existing CSS vars (––bg ––surface ––border ––muted ––text ––chip-bg ––accent-tint ––accent-fg ––blue); keep light/dark working.
+ - Not available on phone (grid hidden): drag-to-move / resize cards, drag plan onto calendar. Move cards via edit modal.
+
+DON'T BREAK: ids used by original code (#grid #addBtn #viewModeSeg #planInput #planAddBtn #settingsBtn #recapBtn #archiveTopBtn
+ #yearTitle #todayBtn #prevYear #nextYear); keep render() wrapper; keep per-mode "has-guest-banner" sticky offset.
+TEST: playwright/chromium viewport 390x780 (also deviceScaleFactor 2.625), click #viewModeSeg buttons, #calStrip .cs-item.
+
+PHONE UPDATE LOG (latest state; overrides older text above where they differ)
+ - Topbar: [centered title v] only. #todayBtn, #prevYear, #nextYear are display:none on phone (ids kept; Today now lives in the picker).
+ - Title picker (#monthPop, built by buildPop(), popMode = current view mode): Year = 12-year grid (arrows +-12), Month = 12 months (arrows +-1 year),
+   Day = month calendar (Mon first, arrows +-1 month). Bottom "Today" button clicks #todayBtn programmatically (jumps to today's Day view).
+   Outside-click handler ignores detached targets (picker re-renders on arrow taps).
+ - Strip row = .cal-nav [ <  #calStrip  > ] (#csPrev/#csNext, stepNav(): steps selection by 1, rolls over into next year/month/day;
+   in Day view the arrows move by HOUR and roll into prev/next day). Previous/next period chips are drawn faded (.ghost, opacity .35, GH=10 chips; tap = jump there).
+   Active chip is always centred: --cs-pad spacers (::before/::after on .cal-strip) + scroll target. renderCalStrip() keeps nodes when only the
+   selection changed (class toggle + smooth scroll); on rebuild it keeps the old active chip at its screen x (data-id), then glides.
+ - Feed (renderFeed) now has the SAME grouping in all 3 modes (headers = feedHour(label, -1, tag, kind, n); kinds still/on/up share fold state collapsedG;
+   mobFeed gets class .is-month in Month AND Year view = smaller card fonts):
+     Day  : All day (top, square row) > Still going > On going > Upcoming.
+     Month: All month (top, square row; whole-year plans Jan-Dec EXCLUDED) > Still going (grouped by start date) > Today (= "That day" if not today)
+            > Tomorrow (= "Next day") > link "N timed plans >" at bottom (.mf-timed: line left, italic text right; opens Day view). Timed plans are NOT listed.
+     Year : All year (top, square row, plans Jan-Dec, no "Jan - Dec" label) > Still going (by start month) > This month (= "That month") > Next month
+            > link "N daily plans >" (.mf-timed, opens Month view).
+ - Square row: buildAllRow(cards) -> .mf-allwrap > .mf-allday (horizontal scroll, cards .mcard.sq 83x83, title max 3 lines, done button bottom-right)
+   + .mf-allmore chevron (shown only while more content is to the right; tap scrolls). Month/Year override: .mob-feed.is-month .mcard(.sq).
+ - New MTXT keys (id+en): tagToday tagThisDay tagTomorrow tagNextDay timedLink allYear tagThisMonth tagThatMonth tagNextMonth.
+ - Other: Plans row: fold chip (.plan-fold) background transparent. Title triangle (.year-title.pickable::after) is 17px and shown in ALL modes.
+ - All edits are inside @media (max-width:560px) (end of COMPACT MODE block) or the mobile IIFE; desktop untouched.
+
+PHONE UPDATE LOG 2 (latest; overrides older text where it differs) - ALL of this is phone-only (<=560px), desktop untouched
+ - ADD/EDIT FORMS (#overlay event modal, #planOverlay plan modal; both use .modal.modal-wide): full-screen sheet on phone
+   (100vw x 100dvh, no radius, slide-up). Sticky h3 title bar on top, close X = .modal-x (#modalX / #pModalX, position:fixed top-right,
+   display:none on desktop, wired to closeModal / closePlanModal), sticky .modal-actions (Cancel/Save) at the bottom. Inputs are 16px (no iOS zoom).
+   CSS: block "ADD/EDIT FORM on phone" right before the "SUMMARY (keuangan)" block.
+ - SUMMARY sheet: width/inner use 100% (NOT 100vw): 100vw includes the page scrollbar (Year view) and pushed the sheet ~15px off-screen.
+ - DAY MODE strip arrows (#csPrev/#csNext, stepNav): move by ONE HOUR; past 00:00/23:00 they roll into prev/next day (hour 23/0). Year/Month unchanged.
+ - TOP TITLE (#yearTitle): text must be exactly centred, triangle hangs beside it: ::after = visible triangle, ::before = invisible twin (nbsp + triangle, same size)
+   on the left. .topbar > .view-mode-row is taken out of the flex flow (position:absolute, 0x0) - it used to push the title ~3px off-centre.
+   The fixed dock inside it still works.
+ - BOTTOM DOCK (#viewModeSeg pill + #addBtn): both are exactly var(--fab) tall with the same bottom (--dock-bottom). Sliding thumb (.view-thumb) x-offset
+   = btnRect.left - segRect.left - seg.clientLeft (border!) in updateViewModeSeg() AND getSegMetrics(). Dock buttons have NO :hover/:focus background
+   (touch keeps sticky :hover); pill border is color-mix(text 20%, surface) so its edge visually matches the blue button.
+   "+" in #addBtn is DRAWN (#addBtn::before = two gradient bars, 18px; 16px in COMPACT), not a font glyph - keep it that way for exact centring.
+ - KNOWN: the file has NO <meta name="viewport">. On a real phone the layout viewport becomes 980px and phone mode never triggers; add
+   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"> if testing on a real device (env(safe-area-*) also needs viewport-fit=cover).
+ - TEST: playwright chromium, viewport 390x780; for scrollbar bugs launch with ignore_default_args=['--hide-scrollbars'].
+
+-->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -25,15 +136,14 @@ try{
     --row-hover:#f5f7fa;
     --blue:#1a73e8;          /* main accent (fills) */
     --accent-fg:#1a73e8;     /* main accent used as text */
-    --money:#0d8043;         /* money accent (fills) */
-    --money-fg:#0d8043;      /* money accent used as text */
+    --money:#0b8043;              /* money colour follows the accent temperature: cool accent = green, warm accent = red (set in applyAppearance) */
+    --money-fg:#0b8043;
     --t1:10%; --t2:6%; --t3:28%;
     --accent-tint:color-mix(in srgb, var(--blue) var(--t1), var(--bg));
     --accent-tint-2:color-mix(in srgb, var(--blue) var(--t2), var(--bg));
     --accent-border:color-mix(in srgb, var(--blue) var(--t3), var(--bg));
     --accent-hover:color-mix(in srgb, var(--blue) 85%, black);
     --money-tint:color-mix(in srgb, var(--money) var(--t1), var(--bg));
-    --money-border:color-mix(in srgb, var(--money) var(--t3), var(--bg));
     --money-hover:color-mix(in srgb, var(--money) 82%, black);
     --danger-bg:#fdecea; --danger-text:#8c1d13; --danger-border:#f6c6c0;
     --expense-fg:#d50000;
@@ -43,9 +153,10 @@ try{
     --ev-pad-y:6px; --ev-pad-x:10px; --ev-font:13px; --ev-margin-y:5px; --note-font:11.5px;
     --ev-amount-pb:20px; --amt-bottom:4px; --plan-pad-y:6px; --plan-font:13.5px;
 
-    --tomato:#d50000; --flamingo:#e67c73; --tangerine:#f4511e; --banana:#f6bf26;
-    --sage:#33b679; --basil:#0b8043; --peacock:#039be5; --blueberry:#3f51b5;
-    --lavender:#7986cb; --grape:#8e24aa; --graphite:#616161;
+    /* card colours: 8 strong base hues. Light = deep fills with white text (banana keeps dark text) */
+    --tomato:#d50000; --tangerine:#c2410c; --banana:#f6bf26; --basil:#0b8043;
+    --peacock:#0277bd; --blueberry:#3f51b5; --grape:#8e24aa; --graphite:#50565c;
+    --on-card:#fff; --on-banana:#3c2f00; --lift:#000;
   }
   :root[data-theme="dark"]{
     color-scheme:dark;
@@ -54,12 +165,18 @@ try{
     --t1:20%; --t2:12%; --t3:42%;
     --danger-bg:#3b1f1c; --danger-text:#f6b8b1; --danger-border:#6b2d27;
     --expense-fg:#f28b82;
+    --money-fg:#81c995;
+    /* card colours in dark: lighter, softer tones with dark text (saturated fills glare on dark surfaces) */
+    --tomato:#f28b82; --tangerine:#ff8a65; --banana:#fdd663; --basil:#81c995;
+    --peacock:#81d4fa; --blueberry:#9fa8da; --grape:#ce93d8; --graphite:#9aa0a6;
+    --on-card:#202124; --on-banana:#202124; --lift:#fff;
   }
   :root[data-density="compact"]{
     --row-min-h:34px; --label-pad-y:6px; --label-font:13px; --chip-pad-y:4px;
     --ev-pad-y:3px; --ev-pad-x:8px; --ev-font:12px; --ev-margin-y:3px; --note-font:10.5px;
     --ev-amount-pb:17px; --amt-bottom:2px; --plan-pad-y:3px; --plan-font:13px;
   }
+  html{ -webkit-text-size-adjust:100%; text-size-adjust:100%; }
   *{box-sizing:border-box;}
   body{
     margin:0;
@@ -121,12 +238,9 @@ try{
     100%{ transform:scale(1); }
   }
   .plan-item:hover{ background:var(--chip-bg); }
-  .plan-item:hover .plan-del{ opacity:1; }
   .plan-item.active{ background:var(--accent-tint); border-color:var(--accent-border); }
   .plan-item .swatch{ width:15px; height:15px; border-radius:4px; flex:none; }
   .plan-item .plan-name{ flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-  .plan-item .plan-del{ opacity:0; flex:none; color:var(--muted); font-size:15px; padding:2px 4px; border-radius:6px; transition:opacity .15s; }
-  .plan-item .plan-del:hover{ background:var(--chip-hover); color:var(--tomato); }
   .plan-item .plan-badge{
     width:15px; height:15px; border-radius:4px; flex:none;
   }
@@ -212,6 +326,8 @@ try{
      an indicator. Styled explicitly so it's always visible, not a thin
      OS overlay scrollbar that disappears. */
   .row-line{ grid-column:1 / -1; border-bottom:1px solid var(--border); transition:background .12s ease; }   /* = .hour-row (Day) */
+  /* .grid keeps 14px of right padding as breathing room for cards; let the full-width lines/tints run through it so they reach the rounded right edge (Year/Month; Day view has no padding) */
+  .grid:not(.single-day) > .row-line, .grid:not(.single-day) > .month-recap-strip{ margin-right:-14px; }
   .row-line.today{ background:var(--accent-tint); transition:background .3s; }   /* slow fade only for the "Today" flash */
 
   /* single-day view: one specific date, hourly agenda grid */
@@ -230,7 +346,7 @@ try{
        Day          : label left-aligned at 16px like Year/Month; hour labels right-aligned in the gutter (same edge as the
                       hour labels), content starts at the hourly grid's left line
      ================================================================ */
-  :root{ --day-gutter:158px; --recap-h:44px; --recap-label-fs:12px; --recap-text-fs:12px; }
+  :root{ --hbar-h:8px; --day-gutter:158px; --recap-h:44px; --recap-label-fs:12px; --recap-text-fs:12px; }
 
   /* --- Year & Month: strip is a grid that reuses the parent's columns --- */
   .month-recap-strip{
@@ -271,9 +387,9 @@ try{
 
   /* --- shared card list --- */
   .all-day-list{ flex:1; min-width:0; display:flex; flex-wrap:wrap; align-items:center; gap:6px; min-height:28px; }
-  .all-day-card{ padding:5px 10px; border-radius:14px; font-size:12.5px; cursor:pointer; color:#fff; }
+  .all-day-card{ padding:5px 10px; border-radius:14px; font-size:12.5px; cursor:pointer; color:var(--on-card); }
   .all-day-row .all-day-card, .all-day-card.plan-ghost-card{ font-weight:500; }   /* same weight as a timed card, so dropping a timed card here doesn't change the text */
-  .all-day-card.done{ opacity:.62; text-decoration:line-through; }
+  .all-day-card.done{ text-decoration:line-through; }
   .day-hours{ position:relative; margin-top:calc(var(--row-min-h) / 2 + 1px);   /* 00:00 lands on the same y as the "1 Tue" row in Month view */ margin-left:var(--day-gutter); border-left:1px solid var(--border); border-bottom:1px solid var(--border); }
   /* Timed event cards live in their own overlay layer so a wide row of fixed-width
      (110px) cards can scroll horizontally without clipping the hour labels/lines,
@@ -290,15 +406,11 @@ try{
      grid's own bottom edge once you scroll past it, instead of floating on past it. Mirrors
      .day-events-scroll 1:1. */
   .day-hfloat{
-    position:sticky; bottom:6px; height:14px; z-index:20; width:100%;
+    position:sticky; bottom:6px; height:var(--hbar-h); z-index:20; width:100%;
     overflow-x:auto; overflow-y:hidden; display:none;
-    scrollbar-width:auto; scrollbar-color:var(--muted) var(--chip-bg);
   }
   .day-hfloat.show{ display:block; }
   .day-hfloat-inner{ height:1px; }
-  .day-hfloat::-webkit-scrollbar{ height:11px; }
-  .day-hfloat::-webkit-scrollbar-track{ background:var(--chip-bg); border-radius:6px; }
-  .day-hfloat::-webkit-scrollbar-thumb{ background:var(--muted); border-radius:6px; border:3px solid var(--chip-bg); }
   .day-events-inner{ position:relative; height:100%; width:max(100%, var(--dh-content-w, 0px)); }
   .hour-row.js-hover{ background:var(--row-hover); }
   .hour-row{ position:absolute; left:0; right:0; border-top:1px solid var(--border); cursor:pointer; }
@@ -330,11 +442,11 @@ try{
   .task-chip{ background:var(--chip-bg); color:var(--muted); font-size:12px; padding:5px 10px; border-radius:12px; font-weight:500; font-style:italic; cursor:pointer; width:100%; box-sizing:border-box; text-align:center; display:flex; align-items:center; justify-content:center; gap:6px; position:relative; }
   .task-chip:hover{ background:var(--chip-hover); }
 
-  .event{ display:flex; flex-direction:column; align-items:flex-start; justify-content:flex-start; text-align:left; gap:2px; color:#fff; font-weight:500; font-size:var(--ev-font);
+  .event{ display:flex; flex-direction:column; align-items:flex-start; justify-content:flex-start; text-align:left; gap:2px; color:var(--on-card); font-weight:500; font-size:var(--ev-font);
     padding:var(--ev-pad-y) var(--ev-pad-x); border-radius:8px; align-self:flex-start; margin:var(--ev-margin-y) 0; cursor:grab; touch-action:none; user-select:none;
     box-shadow:0 1px 3px rgba(0,0,0,.18), 1px 0 2px rgba(0,0,0,.06), inset 0 0 0 1px rgba(255,255,255,.28);
     transition:opacity .2s, box-shadow .15s, transform .15s; position:relative; overflow:hidden; }
-  .event:hover{ box-shadow:0 4px 10px rgba(0,0,0,.28), inset 0 0 0 1px rgba(255,255,255,.4); transform:translateY(-2px); z-index:5; }
+  .event:hover{ box-shadow:0 0 12px rgba(0,0,0,.30), inset 0 0 0 1px rgba(255,255,255,.4); transform:translateY(-2px); z-index:5; }
   body.dnd .event:not(.dragging):hover{ transform:none; z-index:auto; box-shadow:0 1px 3px rgba(0,0,0,.18), 1px 0 2px rgba(0,0,0,.06), inset 0 0 0 1px rgba(255,255,255,.28); }   /* no hover lift while dragging */
   .event .ev-title{ font-weight:500; }
   .event.has-amount{ padding-bottom:var(--ev-amount-pb); }
@@ -348,12 +460,17 @@ try{
     overflow:hidden; text-overflow:ellipsis; white-space:normal; line-height:1.3;
   }
   .event.span{ align-self:stretch; }
-  .event.done{ opacity:.62; }
+  /* done: same opaque-mix approach as priority III/IV (no opacity), so the text stays readable; the strike-through and the filled dot say "done" */
+  .event.done, .all-day-card.done{ background:color-mix(in srgb, var(--c) 28%, var(--bg)); color:var(--text); --on:var(--text); }
+  .event.done .done-dot svg{ stroke:var(--bg); }
+  .event.banana.done{ --on:var(--text); }
+  .event.done .done-dot{ opacity:.85; }
   .event.done .ev-title{ text-decoration:line-through; text-decoration-thickness:1.5px; }
-  /* Priority: Low = pale, Normal = as before, High = brighter / more vivid (done cards keep their own faded look) */
-  .event.pri-1:not(.done), .all-day-card.pri-1:not(.done){ filter:saturate(1.45) brightness(1.14); }                 /* I   – highest: brightest */
-  .event.pri-3:not(.done), .all-day-card.pri-3:not(.done){ opacity:.72; filter:saturate(.8); }                        /* III – paler */
-  .event.pri-4:not(.done), .all-day-card.pri-4:not(.done){ opacity:.48; filter:saturate(.5); }                        /* IV  – palest */
+  /* Priority = one dark -> light scale on the fill, no outlines: I = deepest (light theme) / brightest (dark theme), II = the card colour,
+     III and IV = the colour mixed into the background. Opaque mixes (no opacity/filter) keep the text readable in both themes. */
+  .event.pri-1:not(.done), .all-day-card.pri-1:not(.done){ background:color-mix(in srgb, var(--c) 78%, var(--lift)); }
+  .event.pri-3:not(.done), .all-day-card.pri-3:not(.done){ background:color-mix(in srgb, var(--c) 38%, var(--bg)); color:var(--text); --on:var(--text); }
+  .event.pri-4:not(.done), .all-day-card.pri-4:not(.done){ background:color-mix(in srgb, var(--c) 22%, var(--bg)); color:var(--text); --on:var(--text); }
   .pri-seg button{ padding:6px 16px; font-weight:600; letter-spacing:.5px; }
   /* Right-edge "more cards to the right" hint (fixed, follows the scrollable calendar) */
   .rhint{ position:fixed; z-index:18; width:46px; display:none; pointer-events:none; background:linear-gradient(to right, transparent, var(--bg) 88%); align-items:center; justify-content:flex-end; }
@@ -368,12 +485,11 @@ try{
   .recap-trow.done .rtitle{ opacity:.6; }
 
   /* Done toggle on the card itself */
-  .event{ --on:#fff; }
-  .event.banana{ --on:#3c2f00; }
+  .event{ --on:var(--on-card); }
+  .event.banana{ --on:var(--on-banana); }
   /* the card's own colour, used to "cut out" the check from the filled circle */
-  .event.tomato{ --card:var(--tomato); } .event.flamingo{ --card:var(--flamingo); } .event.tangerine{ --card:var(--tangerine); }
-  .event.banana{ --card:var(--banana); } .event.sage{ --card:var(--sage); } .event.basil{ --card:var(--basil); }
-  .event.peacock{ --card:var(--peacock); } .event.blueberry{ --card:var(--blueberry); } .event.lavender{ --card:var(--lavender); }
+  .event.tomato{ --card:var(--tomato); } .event.tangerine{ --card:var(--tangerine); } .event.banana{ --card:var(--banana); }
+  .event.basil{ --card:var(--basil); } .event.peacock{ --card:var(--peacock); } .event.blueberry{ --card:var(--blueberry); }
   .event.grape{ --card:var(--grape); } .event.graphite{ --card:var(--graphite); }
   .done-btn{ position:absolute; z-index:7; width:24px; height:24px; padding:0; border:0; background:transparent; color:var(--on); display:flex; align-items:center; justify-content:center; cursor:pointer; transition:opacity .15s; }
   .done-dot{ width:14px; height:14px; border-radius:50%; border:1.6px solid currentColor; opacity:.5; display:flex; align-items:center; justify-content:center; transition:transform .12s, opacity .12s, background .12s; }
@@ -398,20 +514,21 @@ try{
   /* Day view: neighbours glide to their new lane while a card is being dragged (live reflow) */
   .event.timed-card{ transition:left .22s cubic-bezier(.2,.8,.2,1), top .22s cubic-bezier(.2,.8,.2,1), opacity .2s, box-shadow .15s, transform .15s; }
   .event.timed-card.dragging, .event.timed-card.resizing{ transition:opacity .2s, box-shadow .15s; }
-  .event.dragging{ cursor:grabbing; z-index:100; box-shadow:0 10px 22px rgba(0,0,0,.32); opacity:.92; }
-  .event.resizing{ z-index:100; box-shadow:0 10px 22px rgba(0,0,0,.32); }
+  .event.dragging{ cursor:grabbing; z-index:100; box-shadow:0 0 24px rgba(0,0,0,.34); opacity:.92; }   /* zero offset: the glow is even on top and bottom */
+  .event.resizing{ z-index:100; box-shadow:0 0 24px rgba(0,0,0,.34); }
 
   .resize-handle{ position:absolute; left:6px; right:6px; height:9px; cursor:ns-resize; z-index:6; display:flex; align-items:center; justify-content:center; }
-  .resize-handle.top{ top:-2px; }
-  .resize-handle.bottom{ bottom:-2px; }
-  .resize-handle::after{ content:""; width:26px; height:3px; border-radius:2px; background:rgba(255,255,255,0); transition:background .15s; }
-  .event:hover .resize-handle::after{ background:rgba(255,255,255,.55); }
-  .resize-handle:hover::after{ background:rgba(255,255,255,.9); }
+  /* both handles sit flush with their edge (same inset), so the top and bottom grip bars look identical */
+  .resize-handle.top{ top:0; }
+  .resize-handle.bottom{ bottom:0; }
+  .resize-handle::after{ content:""; width:26px; height:3px; border-radius:2px; background:transparent; transition:background .15s; }
+  .event:hover .resize-handle::after{ background:color-mix(in srgb, var(--on, #fff) 55%, transparent); }
+  .resize-handle:hover::after{ background:color-mix(in srgb, var(--on, #fff) 90%, transparent); }
 
-  .tomato{background:var(--tomato);} .flamingo{background:var(--flamingo);} .tangerine{background:var(--tangerine);}
-  .banana{background:var(--banana); color:#3c2f00;} .sage{background:var(--sage);} .basil{background:var(--basil);}
-  .peacock{background:var(--peacock);} .blueberry{background:var(--blueberry);} .lavender{background:var(--lavender);}
-  .grape{background:var(--grape);} .graphite{background:var(--graphite);}
+  .tomato{background:var(--tomato); --c:var(--tomato);} .tangerine{background:var(--tangerine); --c:var(--tangerine);}
+  .banana{background:var(--banana); --c:var(--banana); color:var(--on-banana);} .basil{background:var(--basil); --c:var(--basil);}
+  .peacock{background:var(--peacock); --c:var(--peacock);} .blueberry{background:var(--blueberry); --c:var(--blueberry);}
+  .grape{background:var(--grape); --c:var(--grape);} .graphite{background:var(--graphite); --c:var(--graphite);}
 
   /* Modal */
   .overlay{
@@ -419,6 +536,7 @@ try{
     opacity:0; visibility:hidden; pointer-events:none;
     transition:opacity .18s ease-out, background .18s ease-out, visibility 0s linear .18s;
   }
+  html:has(.overlay.open), html:has(.overlay.open) body{ overflow:hidden; }   /* a sheet is open: only the sheet scrolls, not the page behind it (no double scrollbar) */
   .overlay.open{
     background:rgba(0,0,0,.35); opacity:1; visibility:visible; pointer-events:auto;
     transition:opacity .18s ease-out, background .18s ease-out, visibility 0s linear 0s;
@@ -430,6 +548,7 @@ try{
   }
   .overlay.open .modal{ transform:scale(1) translateY(0); opacity:1; }
   .modal h3{ margin:0 0 12px; font-size:17px; font-weight:600; }
+  .modal-x{ display:none; }   /* phone-only close button (shown in the @media (max-width:560px) block) */
   .field{ margin-bottom:10px; }
   .field label{ display:block; font-size:12.5px; color:var(--muted); margin-bottom:4px; font-weight:500; }
   .field input[type=text], .field input[type=time], .field select, .field textarea{
@@ -449,11 +568,16 @@ try{
   .swatch-btn.selected{ border-color:var(--text); }
   .modal-actions{ display:flex; justify-content:space-between; align-items:center; margin-top:12px; }
   .modal-actions .right{ display:flex; gap:8px; }
+  /* keyboard order is Note -> Save -> Cancel -> Delete, the picture stays Delete (left) ... Cancel, Save (right) */
+  .modal-actions .right.rev{ flex-direction:row-reverse; }
+  #deleteBtn, #pDeleteBtn{ order:-1; }
+  .add-plan:focus-within{ box-shadow:0 0 0 2px var(--blue); }
+  .btn:focus-visible, .btn-primary:focus-visible, .link-danger:focus-visible{ outline:2px solid var(--accent-fg); outline-offset:2px; }
   /* Add/Edit Event: fields on the left, Note on the right (same width as the left column, same height as it) */
   .modal.modal-wide{ width:min(760px, 94vw); max-height:92vh; overflow-y:auto; }
   .modal-cols{ display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:18px; align-items:stretch; }
   .modal-col{ min-width:0; }
-  .modal-wide .swatches{ gap:6px; }   /* all 11 colours fit on one row in the wide column (no lone swatch on a second line) */
+  .modal-wide .swatches{ gap:6px; }   /* all 8 colours fit on one row */
   .modal-note{ display:flex; flex-direction:column; }
   .modal-note .field{ flex:1; display:flex; flex-direction:column; min-height:0; margin-bottom:10px; }
   .modal-note textarea{ flex:1 1 0; height:0; min-height:120px; resize:none; }   /* height:0 -> the left column alone decides the row height */
@@ -538,13 +662,14 @@ try{
   .recap-empty{ font-size:13.5px; color:var(--muted); text-align:center; padding:20px 0; }
   .recap-table-wrap{ flex:1; min-height:0; overflow-y:auto; border:1px solid var(--border); border-radius:10px; }
   .recap-thead, .recap-trow{
-    display:grid; grid-template-columns:38px minmax(0,1fr) 84px 84px 96px minmax(150px,1.2fr); gap:6px; padding:6px 10px; align-items:center;
+    display:grid; grid-template-columns:46px minmax(90px,1fr) var(--rc-in,84px) var(--rc-out,84px) var(--rc-bal,96px) minmax(150px,1.2fr); gap:6px; padding:6px 10px; align-items:center;
   }
   .recap-thead{
     position:sticky; top:0; z-index:1; background:var(--chip-bg); font-size:10.5px; font-weight:700;
     color:var(--muted); text-transform:uppercase; letter-spacing:.3px;
   }
   .recap-thead .num{ text-align:right; }
+  .recap-trow .rin, .recap-trow .rout, .recap-trow .rsaldo{ white-space:nowrap; font-variant-numeric:tabular-nums; }   /* a number never wraps; its column is sized to the widest value (see renderRecap) */
   .recap-trow{ border-top:1px solid var(--border); font-size:12.5px; cursor:pointer; }
   .recap-trow:hover{ background:var(--chip-bg); }
   .recap-trow .rmonth{ color:var(--muted); font-size:12px; }
@@ -561,14 +686,14 @@ try{
   .recap-trow .rnote:focus{ background:var(--bg); border-color:var(--accent-border, var(--border)); }
 
   .plan-ghost{
-    position:fixed; z-index:200; pointer-events:none; padding:9px 16px; border-radius:8px; color:#fff;
+    position:fixed; z-index:200; pointer-events:none; padding:9px 16px; border-radius:8px; color:var(--on-card);
     font-size:13.5px; font-weight:500; box-shadow:0 14px 28px rgba(0,0,0,.35); transform:translate(-8px,-8px) rotate(-1.5deg) scale(1.04);
     animation:ghost-pickup .15s ease-out;
   }
   .plan-ghost-card{
     position:fixed !important; z-index:200; pointer-events:none; margin:0 !important;
     transform:translate(-8px,-8px) rotate(-1.5deg) scale(1.04); max-width:220px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
-    box-shadow:0 14px 28px rgba(0,0,0,.35);
+    box-shadow:0 0 26px rgba(0,0,0,.36);
     animation:ghost-pickup .15s ease-out;
   }
   @keyframes ghost-pickup{
@@ -585,21 +710,37 @@ try{
   .grid:not(.single-day){ scrollbar-width:none; }
   .grid:not(.single-day)::-webkit-scrollbar{ display:none; }
   .grid.panning{ cursor:grabbing; user-select:none; }
+  /* Year/Month bar: ALWAYS sits 6px above the bottom edge of the window, whether the calendar is short (Year)
+     or long (Month). .main is a column that is at least window-tall; margin-top:auto pushes the bar to its
+     bottom, and the -34px bottom margin cancels .main's 40px bottom padding so the resting spot equals the
+     floating spot (sticky bottom:6px). Before, a short grid left the bar right under the table instead. */
+  .main{ display:flex; flex-direction:column; }
+  .main > .grid{ flex:none; margin-bottom:6px; }
   .grid-hfloat{
-    position:sticky; bottom:6px; height:14px; margin-top:6px; z-index:20; width:100%;
+    position:sticky; bottom:6px; height:var(--hbar-h); margin:auto 0 -34px; z-index:20; width:100%; flex:none;
     overflow-x:auto; overflow-y:hidden; display:none;
-    scrollbar-width:auto; scrollbar-color:var(--muted) var(--chip-bg);
   }
   .grid-hfloat.show{ display:block; }
   .grid-hfloat > div{ height:1px; }
-  .grid-hfloat::-webkit-scrollbar{ height:11px; }
-  .grid-hfloat::-webkit-scrollbar-track{ background:var(--chip-bg); border-radius:6px; }
-  .grid-hfloat::-webkit-scrollbar-thumb{ background:var(--muted); border-radius:6px; border:3px solid var(--chip-bg); }
+  /* Shared look of both floating scrollbars (Year/Month + Day): a slim, always-visible bar.
+     The standard scrollbar-width/-color properties are deliberately NOT set on Chromium/Safari:
+     Chrome 121+ then ignores ::-webkit-scrollbar and falls back to the native bar, whose
+     thickness changes with OS/zoom/hover — that was the "sometimes thick, sometimes different" bar.
+     Here the bar is exactly --hbar-h tall everywhere; the thumb is 6px (8px minus a 1px transparent edge). */
+  .grid-hfloat::-webkit-scrollbar, .day-hfloat::-webkit-scrollbar{ height:var(--hbar-h); }
+  .grid-hfloat::-webkit-scrollbar-track, .day-hfloat::-webkit-scrollbar-track{ background:var(--chip-bg); border-radius:999px; }
+  .grid-hfloat::-webkit-scrollbar-thumb, .day-hfloat::-webkit-scrollbar-thumb{ background:var(--muted); background-clip:padding-box; border:1px solid transparent; border-radius:999px; min-width:36px; }
+  .grid-hfloat::-webkit-scrollbar-thumb:hover, .day-hfloat::-webkit-scrollbar-thumb:hover{ background:var(--text); background-clip:padding-box; }
+  /* Firefox has no ::-webkit-scrollbar: use its thin variant there only */
+  @supports not selector(::-webkit-scrollbar){
+    .grid-hfloat, .day-hfloat{ scrollbar-width:thin; scrollbar-color:var(--muted) var(--chip-bg); }
+  }
 
   /* ---------- Settings modal ---------- */
   .settings-modal{ width:440px; max-height:90vh; overflow-y:auto; }
   .settings-modal h3{ margin-bottom:4px; }
-  .s-section{ padding:14px 0 6px; border-top:1px solid var(--border); }
+  .s-section{ padding:14px 0; border-top:1px solid var(--border); }
+  .s-section > :last-child{ margin-bottom:0; }
   .s-section:first-of-type{ border-top:none; padding-top:8px; }
   .s-section h4{ margin:0 0 10px; font-size:13.5px; font-weight:600; color:var(--text); }
   /* Sidebar plan: round check button (replaces the old ✓ and ✕). Click -> circle fills, check draws, row collapses, plan goes to the archive */
@@ -613,10 +754,6 @@ try{
   @keyframes plan-check-draw{ to{ stroke-dashoffset:0; } }
   @keyframes plan-check-pop{ 0%{ transform:scale(1); } 50%{ transform:scale(1.28); } 100%{ transform:scale(1); } }
   @media (prefers-reduced-motion:reduce){ .plan-item.completing .plan-check, .plan-item.completing .plan-check svg{ animation:none; stroke-dashoffset:0; } }
-  .archive-btn{ display:flex; align-items:center; justify-content:space-between; width:100%; margin:auto 0 6px; padding:7px 10px; border:none; background:transparent; color:var(--muted); font:inherit; font-size:13px; border-radius:10px; cursor:pointer; text-align:left; }
-  .archive-btn:hover{ background:var(--chip-bg); color:var(--text); }
-  .archive-count{ font-size:11.5px; background:var(--chip-bg); color:var(--text); border-radius:999px; padding:2px 8px; }
-  .archive-btn + .profile{ margin-top:0; }
   /* Archive button in the top bar (always visible, also on phones) */
   .archive-top{ position:relative; flex:none; width:36px; height:36px; padding:0; display:flex; align-items:center; justify-content:center; background:var(--surface); color:var(--muted); border:1px solid var(--border); border-radius:10px; cursor:pointer; transition:background .15s, color .15s; }
   .archive-top:hover{ background:var(--chip-bg); color:var(--text); }
@@ -643,8 +780,6 @@ try{
   .seg button.on{ background:var(--accent-tint); color:var(--accent-fg); font-weight:600; }
   .s-preview{ display:flex; align-items:baseline; gap:12px; flex-wrap:wrap; background:var(--chip-bg); border-radius:10px; padding:8px 12px; margin-bottom:8px; font-size:13px; color:var(--muted); }
   .s-preview b{ color:var(--text); font-weight:700; font-variant-numeric:tabular-nums; }
-  .accent-row{ display:flex; align-items:center; gap:12px; margin-bottom:8px; }
-  .accent-row > span{ width:76px; flex:none; font-size:13px; color:var(--muted); }
   .btn.armed{ background:var(--danger-bg); color:var(--danger-text); border-color:var(--danger-border); }
   .s-note{ margin:0 0 10px; font-size:12.5px; line-height:1.4; color:var(--muted); }
   .link-muted{ color:var(--muted); background:none; border:none; font-size:13.5px; cursor:pointer; font-weight:500; padding:8px; font-family:inherit; }
@@ -688,7 +823,7 @@ try{
   /* Narrow: the summary table scrolls sideways so the Note column keeps its width */
   @media (max-width:860px){
     .recap-table-wrap{ overflow-x:auto; }
-    .recap-thead, .recap-trow{ min-width:640px; }
+    .recap-thead, .recap-trow{ min-width:calc(46px + 90px + var(--rc-in,84px) + var(--rc-out,84px) + var(--rc-bal,96px) + 150px + 5 * 6px + 20px); }
   }
 
   /* Small screens: plans move to a compact strip on top */
@@ -699,7 +834,6 @@ try{
     .add-plan{ margin-bottom:8px; }
     #planList{ max-height:140px; overflow-y:auto; }
     .hint{ display:none; }
-    .archive-btn{ display:none; }
     /* Settings leaves the plan list and sits in the header row as its own outlined button,
        so it can't be mistaken for one more plan item */
     .sidebar{ position:relative; }
@@ -728,6 +862,386 @@ try{
     .btn-primary{ padding:7px 12px; }
   }
   @media (max-width:400px){ .seg.view-seg button{ padding:8px 8px; } }
+
+
+  .cal-nav, .cs-nav, .cal-strip, .month-pop, .mob-feed, .brand-actions, .plan-plus, .plan-fold, .plan-more, .recap-tab .ic-mob{ display:none; }
+  /* ===== PHONE MODE - read the MOBILE MODE DOC comment at the top of this file before editing ===== */
+  /* ================= MOBILE APP LAYOUT (HP) =================
+     - header (judul bulan/hari + Today + panah) nempel di atas, konten scroll di bawahnya
+     - switch Year/Month/Day melayang di bawah, tombol + melayang di kanannya */
+  @media (max-width:560px){
+    :root{ --fab:44px; --dock-gap:8px; --dock-side:12px; --dock-bottom:calc(10px + env(safe-area-inset-bottom, 0px)); }
+
+    .main{ padding:0 12px calc(var(--fab) + 48px + env(safe-area-inset-bottom, 0px)); }
+
+    /* sticky top header: one row */
+    .topbar{
+      position:sticky; top:0; z-index:25; background:var(--bg);
+      flex-direction:row; flex-wrap:wrap; align-items:center; gap:6px;
+      margin:0 -12px 8px; padding:10px 12px 8px; border-bottom:1px solid var(--border);
+    }
+    body.has-guest-banner .topbar{ top:40px; }
+    .topbar-row, .year-nav, .view-mode-group{ display:contents; }
+    .year-title{ order:1; flex:1 1 auto; min-width:0; margin:0; font-size:17px; font-weight:600;
+      overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    #todayBtn{ order:2; flex:none; padding:6px 11px; font-size:12.5px; }
+    #prevYear{ order:3; flex:none; width:30px; height:30px; }
+    #nextYear{ order:4; flex:none; width:30px; height:30px; }
+    .view-mode-row{ order:5; flex:none; gap:0; }
+    .view-mode-row .top-actions{ margin-left:2px; gap:6px; }
+    .view-mode-label{ display:none; }
+    .recap-tab{ margin-right:0; border:1px solid var(--money); border-radius:10px; width:36px; height:36px; box-shadow:none; }
+
+
+    /* calendar reference strip (month chips / day strip / week strip) + month picker */
+    .cal-strip{ display:flex; order:10; flex:1 1 100%; position:relative; gap:4px; overflow-x:auto; scrollbar-width:none;
+      margin:2px -12px 0; padding:2px 12px 4px; -webkit-overflow-scrolling:touch; }
+    .cal-strip::-webkit-scrollbar{ display:none; }
+    .cs-item{ flex:none; min-width:42px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:3px;
+      padding:7px 4px 6px; border:none; border-radius:13px; background:transparent; color:var(--text); font:inherit; cursor:pointer;
+      -webkit-tap-highlight-color:transparent; }
+    .cs-item .cs-top{ font-size:11px; line-height:1; color:var(--muted); }
+    .cs-item .cs-num{ font-size:16px; line-height:1.1; font-weight:600; }
+    .cs-item::after{ content:""; width:4px; height:4px; border-radius:50%; background:transparent; }
+    .cs-item.today::after{ background:var(--blue); }
+    .cs-item.on{ background:var(--text); color:var(--bg); }
+    .cs-item.on .cs-top{ color:inherit; opacity:.7; }
+    .cs-item.on.today::after{ background:var(--bg); }
+    .cs-item.mon{ min-width:54px; }
+    .cs-item.mon .cs-num{ font-size:14px; }
+    .cal-strip.week{ overflow:visible; }
+    .cal-strip.week .cs-item{ flex:1 1 0; min-width:0; }
+    .year-title.pickable{ cursor:pointer; }
+    .year-title.pickable::after{ content:" \25BE"; font-size:11px; color:var(--muted); font-weight:400; }
+    .month-pop{ display:block; position:absolute; top:100%; left:12px; right:12px; z-index:30; margin-top:6px; padding:10px;
+      background:var(--surface); border:1px solid var(--border); border-radius:16px; box-shadow:0 10px 30px rgba(0,0,0,.25); }
+    .month-pop[hidden]{ display:none; }
+    .mp-head{ display:flex; align-items:center; justify-content:space-between; margin-bottom:8px; font-size:15px; }
+    .mp-yb{ width:34px; height:34px; border:none; border-radius:50%; background:transparent; color:var(--muted); font-size:22px; cursor:pointer; }
+    .mp-yb:active{ background:var(--chip-bg); }
+    .mp-grid{ display:grid; grid-template-columns:repeat(4,1fr); gap:6px; }
+    .mp-m{ padding:11px 0; border:none; border-radius:12px; background:var(--chip-bg); color:var(--text); font:inherit; font-size:14px; cursor:pointer; }
+    .mp-m.on{ background:var(--text); color:var(--bg); font-weight:600; }
+    .mp-m.now:not(.on){ color:var(--blue); font-weight:600; }
+    .mp-days{ grid-template-columns:repeat(7,1fr); gap:2px; }
+    .mp-wd{ text-align:center; font-size:11px; color:var(--muted); padding:2px 0 4px; }
+    .mp-d{ aspect-ratio:1; border:none; border-radius:50%; background:transparent; color:var(--text); font:inherit; font-size:14px; cursor:pointer; padding:0; }
+    .mp-d.on{ background:var(--text); color:var(--bg); font-weight:600; }
+    .mp-d.now:not(.on){ color:var(--blue); font-weight:700; }
+    .mp-today{ display:block; width:100%; margin-top:8px; padding:9px 0; border:none; border-radius:12px; background:var(--chip-bg); color:var(--accent-fg); font:inherit; font-size:14px; font-weight:600; cursor:pointer; }
+    .mp-today:active{ background:var(--accent-tint); }
+
+
+    /* no calendar grid on phones: the selected tab just lists its plan cards, top to bottom */
+    #grid{ display:none !important; }
+    .mob-feed{ display:flex; flex-direction:column; gap:10px; padding:10px 0 4px; }
+    .mf-sec{ margin:8px 2px 0; font-size:12px; font-weight:600; letter-spacing:.4px; text-transform:uppercase; color:var(--muted); }
+    .mf-hour{ display:flex; align-items:center; gap:10px; margin:8px 2px -2px; font-size:13px; font-weight:600; font-variant-numeric:tabular-nums; color:var(--muted); }
+    .mf-hour .mf-line{ flex:1; height:1px; background:var(--border); }
+    .mf-hour.fold{ cursor:pointer; -webkit-tap-highlight-color:transparent; }
+    .mf-tag{ flex:none; padding:2px 9px; border-radius:999px; font-size:11px; font-weight:600; letter-spacing:.2px; }
+    .mf-tag.on{ background:var(--accent-tint); color:var(--accent-fg); }
+    .mf-tag.still{ background:#c9ebd6; color:#0b5a2f; }
+    .mf-tag.up{ background:#fde9a6; color:#7a5200; }
+    .mf-chev{ flex:none; display:flex; align-items:center; gap:4px; margin-left:-2px; font-size:20px; line-height:1; color:var(--muted); }
+    .mf-chev i{ font-style:normal; font-size:11px; font-weight:700; padding:1px 6px; border-radius:999px; background:var(--chip-bg); }
+    .mf-hour.fold .mf-chev{ transform:none; }
+    .mf-hour.fold:not(.closed) .mf-chev{ transform:rotate(90deg); }
+    .mf-hour.cur{ color:var(--text); }
+    .mf-none{ padding:2px 4px 6px; font-size:13px; color:var(--muted); opacity:.8; }
+    .mf-empty{ padding:36px 12px; text-align:center; font-size:14px; color:var(--muted); }
+    .mf-link{ align-self:flex-start; padding:9px 14px; border:1px solid var(--border); border-radius:999px; background:var(--surface);
+      color:var(--accent-fg); font:inherit; font-size:13.5px; font-weight:500; cursor:pointer; }
+    .mf-allwrap{ position:relative; margin:0 -10px; }
+    .mf-allmore{ position:absolute; right:0; top:2px; bottom:4px; width:30px; display:none; align-items:center; justify-content:flex-end; padding:0 5px 0 0; border:none; border-radius:0;
+      background:linear-gradient(90deg, transparent, var(--bg) 70%); color:var(--text); font-size:26px; line-height:1; cursor:pointer; -webkit-tap-highlight-color:transparent; }
+    .mf-allwrap.more .mf-allmore{ display:flex; }
+    .mf-allday{ display:flex; gap:8px; overflow-x:auto; scrollbar-width:none; margin:0; padding:2px 10px 4px; scroll-padding-inline:10px; scroll-snap-type:x proximity; -webkit-overflow-scrolling:touch; }
+    .mf-allday::-webkit-scrollbar{ display:none; }
+    .mcard.m-lift{ opacity:0; }
+    .mcard.m-ghost{ position:fixed !important; z-index:1000; margin:0 !important; pointer-events:none; box-shadow:0 10px 28px rgba(0,0,0,.35); opacity:.96; touch-action:none; }
+    .mf-hour.m-drop{ background:var(--accent-tint); border-radius:10px; }
+    .mf-hour.m-drop .mf-h{ color:var(--accent-fg); }
+    .mob-feed .mcard{ -webkit-touch-callout:none; -webkit-user-select:none; user-select:none; }
+    .mcard{ margin:0; min-height:56px; gap:4px; padding:12px 50px 12px 14px; border-radius:16px; font-size:15px; cursor:pointer; touch-action:auto; }
+    .mcard:hover{ transform:none; box-shadow:0 1px 3px rgba(0,0,0,.18), inset 0 0 0 1px rgba(255,255,255,.28); }
+    .mcard .time-preview{ font-size:12px; }
+    .mcard .note-preview{ font-size:13px; -webkit-line-clamp:6; }
+    .mcard.has-amount{ padding-bottom:12px; }
+    .mcard .amount-preview{ position:static; margin-top:2px; font-size:12px; }
+    .mcard > .done-btn{ top:8px; right:8px; width:34px; height:34px; }
+    .mcard .done-dot{ width:20px; height:20px; opacity:.75; }
+    .mcard .done-dot svg{ width:11px; height:11px; }
+    .cs-item.has:not(.today)::after{ background:var(--muted); opacity:.55; }
+    .cs-item.on.has:not(.today)::after{ background:var(--bg); opacity:.6; }
+
+    /* Add-plan: no input row by default; "+" next to the plans title reveals it */
+    .sidebar > .brand{ order:0; }
+    .plan-title-row{ order:1; display:flex; align-items:center; justify-content:space-between; }
+    .plan-title-row .plan-list-title{ flex:1; min-width:0; }
+    .plan-plus{ display:flex; align-items:center; justify-content:center; flex:none; width:30px; height:30px; margin:0 4px 2px 2px; padding:0;
+      border:none; border-radius:50%; background:var(--chip-bg); color:var(--accent-fg); font-size:22px; line-height:1; cursor:pointer;
+      transition:transform .15s, background .15s; }
+    .plan-plus:active{ background:var(--accent-tint); }
+    .plan-plus.open{ transform:rotate(45deg); }
+    /* the field slides open to the LEFT of the "+" and covers the title */
+    .plan-title-row{ position:relative; }
+    .plan-title-row .plan-list-title{ transition:opacity .15s; }
+    .plan-title-row.open .plan-list-title{ opacity:0; }
+    .plan-title-row > .add-plan{ position:absolute; left:34px; right:0; top:0; bottom:2px; margin:0; padding:0 3px 0 14px; z-index:2;
+      display:flex; align-items:center; border-radius:999px; background:var(--chip-bg);
+      clip-path:inset(0 100% 0 0); opacity:0; pointer-events:none; transition:clip-path .2s ease, opacity .2s ease; }
+    .plan-title-row.open > .add-plan{ clip-path:inset(0); opacity:1; pointer-events:auto; box-shadow:inset 0 0 0 1.5px var(--blue); }
+    .plan-title-row > .add-plan button{ width:24px; height:24px; flex:none; }
+    #planList{ order:3; }
+    /* chip with a chevron at the right of the title: folds / unfolds the whole unsorted list */
+    .plan-fold{ display:flex; align-items:center; justify-content:center; flex:none; height:22px; padding:0 9px; margin:0 2px 0 6px;
+      border:none; border-radius:999px; background:var(--chip-bg); color:var(--muted); cursor:pointer; transition:background .15s, opacity .15s; }
+    .plan-fold:active{ background:var(--accent-tint); }
+    .plan-fold svg{ transition:transform .18s ease; transform:rotate(90deg); }
+    .sidebar.plans-folded .plan-fold svg{ transform:none; }
+    .plan-title-row.open .plan-fold{ opacity:0; pointer-events:none; }
+    .sidebar.plans-folded #planList, .sidebar.plans-folded > .hint{ display:none; }
+
+    /* Archive + Summary buttons live next to the profile in the logo row */
+    .brand-actions{ display:flex; align-items:center; gap:8px; position:absolute; top:7px; right:56px; z-index:6; }
+
+    /* floating view-mode switch (bottom) */
+    .seg.view-seg{
+      position:fixed !important; z-index:35;
+      left:var(--dock-side); right:calc(var(--dock-side) + var(--fab) + var(--dock-gap));
+      bottom:var(--dock-bottom);
+      width:auto !important; height:var(--fab); padding:5px; gap:4px;
+      background:var(--surface); border:1px solid color-mix(in srgb, var(--text) 20%, var(--surface));   /* crisp edge: the pill's outer height visibly equals the blue + button (both = --fab) */
+      box-shadow:0 6px 22px rgba(0,0,0,.22), 0 1px 3px rgba(0,0,0,.14);
+    }
+    .seg.view-seg button{ flex:1 1 0 !important; width:auto !important; min-width:0; padding:0 4px !important; font-size:14px; }
+    .view-thumb{ top:5px; bottom:5px; background:var(--accent-tint); box-shadow:none; }
+    .seg.view-seg button:hover, .seg.view-seg button:focus{ background:transparent; }   /* only the sliding thumb highlights; a sticky :hover used to leave a grey pill on the last tapped tab */
+    .seg.view-seg button:focus-visible{ outline-offset:-3px; }
+    .view-thumb.dragging{ box-shadow:none; }
+
+    /* floating + button (bottom right) */
+    #addBtn{
+      position:fixed; z-index:35; right:var(--dock-side); bottom:var(--dock-bottom);
+      width:var(--fab); height:var(--fab); padding:0; border-radius:50%;
+      font-size:0; line-height:0; gap:0; justify-content:center;
+      background:var(--blue); color:#fff; border:none;
+      box-shadow:0 6px 22px rgba(0,0,0,.28), 0 1px 3px rgba(0,0,0,.18);
+    }
+    #addBtn:hover, #addBtn:active{ background:var(--accent-hover); }
+    /* "+" is drawn (two bars), not a font glyph: glyph metrics left it ~1px off the visual centre */
+    #addBtn{ display:flex; align-items:center; justify-content:center; }
+    #addBtn::before{ content:""; display:block; width:18px; height:18px; flex:none; transform:none;
+      background:linear-gradient(#fff,#fff) center / 100% 2px no-repeat, linear-gradient(#fff,#fff) center / 2px 100% no-repeat; border-radius:1px; }
+
+    /* keep other floating bits clear of the dock */
+    .day-hfloat{ bottom:calc(var(--fab) + 34px + env(safe-area-inset-bottom, 0px)); }
+    .grid.single-day{ padding-bottom:24px; }
+
+    /* ===== COMPACT MODE (phones): tighter sizes, gaps and type everywhere ===== */
+    .sidebar{ padding:6px 12px; border-bottom:1px solid var(--border); }
+    /* divider between the GRIDD logo row and Unsorted Plans (full width) */
+    .sidebar > .brand{ margin:0 -12px 4px; padding:0 16px 8px; border-bottom:1px solid var(--border); }
+    .brand{ gap:8px; padding:0 4px 4px; font-size:16px; }
+    .brand .dot{ width:24px; height:24px; border-radius:7px; }
+    .brand-actions{ top:4px; right:46px; gap:6px; }
+    .archive-top, .recap-tab{ width:30px !important; height:30px !important; border-radius:9px !important; }
+    .archive-top svg, .recap-tab svg{ width:15px; height:15px; }
+    .archive-top-count{ top:-5px; right:-5px; min-width:15px; height:15px; line-height:15px; font-size:9.5px; }
+    .profile{ top:4px; right:10px; padding:2px; }
+    .pf-avatar{ width:24px; height:24px; font-size:12px; }
+    .pf-dot{ width:8px; height:8px; }
+    /* profile, Archive, Summary: same plain rounded squares, no frame. Size / gap / edge offset are --hb / --hg / --hr,
+       rounded to whole device pixels by setMarkerPx() so the three gaps look identical on every screen density */
+    .profile{ top:5px; right:var(--hr, 10px); width:var(--hb, 28px); height:var(--hb, 28px); padding:0; border:0; border-radius:9px; background:transparent; --ring:var(--bg); }
+    .pf-avatar{ width:var(--hb, 28px); height:var(--hb, 28px); font-size:13px; }
+    .pf-avatar, .pf-avatar img{ border-radius:9px; }
+    .pf-dot{ right:-3px; bottom:-3px; }
+    .brand-actions{ top:5px; right:calc(var(--hr, 10px) + var(--hb, 28px) + var(--hg, 6px) + var(--hx, 2px)); gap:var(--hg, 6px); }   /* --hx: icon boxes are 21.6px around a 17.6px icon, so the gap to the profile square is 2px wider => equal VISIBLE gaps */
+    .archive-top, .recap-tab{ position:relative; width:var(--hi, 21.6px) !important; height:var(--hb, 28px) !important; padding:0 !important; border:0 !important; border-radius:9px !important; }
+    .archive-top::after, .recap-tab::after{ content:""; position:absolute; inset:-2px -4px; }   /* keeps a comfortable tap area around the small icon */
+    /* Archive + Summary: icon only, no coloured square */
+    .archive-top, .recap-tab{ background:transparent !important; box-shadow:none !important; }
+    .recap-tab{ color:var(--money); }
+    .recap-tab .ic-dsk{ display:none; }   /* phone uses the coin icon, desktop keeps the plain $ */
+    .recap-tab .ic-mob{ display:block; }
+    .recap-tab.active{ background:var(--chip-bg) !important; }
+    .archive-top svg, .recap-tab svg{ width:17.6px; height:17.6px; }
+    .plan-list-title{ font-size:11px; margin:2px 6px 2px; }
+    /* Year / Month / Day chip is pushed to the right end of the title, right before the fold chip */
+    .plan-title-row .plan-list-title{ margin-right:0; }
+    .plan-list-title .scope-chip{ margin-left:auto; height:22px; padding:0; font-size:11px; }
+    .plan-fold, .plan-fold:active{ background:transparent; }   /* fold chevron chip: no fill */
+    .plan-plus{ width:26px; height:26px; font-size:19px; margin:0 4px 0 0; }
+    /* add field: ONE pill that starts at the very left and contains the round x button, so circle and outline read as a single shape */
+    .plan-title-row > .add-plan{ left:0; right:0; bottom:0; padding:0 0 0 32px; }
+    /* the round add button fills the pill's full height, so its edge IS the outline on the right end */
+    .plan-title-row > .add-plan button{ height:100%; width:auto; aspect-ratio:1; margin:0; }
+    .plan-plus{ position:relative; z-index:3; }
+    .plan-plus.open{ transform:translateX(2px) rotate(45deg) scale(1.1); background:transparent; }
+    .plan-title-row > .add-plan input{ font-size:13px; }
+    .plan-title-row > .add-plan button{ font-size:17px; }
+    #planList{ max-height:72px; overflow-y:auto; overscroll-behavior:contain; scrollbar-width:none; }   /* JS sets exactly 3 rows (see "plan-more") */
+    #planList::-webkit-scrollbar{ display:none; }
+    .plan-item{ padding:3px 8px 3px var(--mk-pad, 8px); gap:8px; border-radius:12px; font-size:13px; margin-bottom:0; }
+    /* colour marker = a thin vertical line instead of a square */
+    /* colour markers: ONE element draws all the lines with hard gradient stops placed on whole device pixels,
+       so thickness and spacing are identical on every screen density */
+    .plan-item .swatch, .plan-item .plan-badge{ display:none; }
+    .plan-item::before{ content:""; flex:none; width:var(--mk-total, 3px); height:16px; background:var(--mk-bg, transparent); }
+    .plan-item.plan-slot::before{ visibility:hidden; }
+    .plan-item .plan-check{ width:16px; height:16px; }
+    .plan-item{ touch-action:pan-y; }   /* the list scrolls with a finger (max 3 rows visible) */
+    /* "more below" row: always reserved while the list is scrollable, so nothing jumps while scrolling */
+    .plan-more{ order:3; display:none; align-items:center; justify-content:center; gap:3px; height:16px; margin-top:1px;
+      color:var(--muted); font-size:10.5px; font-weight:700; cursor:pointer; -webkit-tap-highlight-color:transparent; }
+    .plan-more.scrollable{ display:flex; }
+    .plan-more svg{ width:11px; height:11px; transition:transform .15s; }
+    .plan-more.at-end svg{ transform:rotate(180deg); }
+    .sidebar.plans-folded .plan-more{ display:none; }
+
+    .main{ padding:0 10px calc(var(--fab) + 32px + env(safe-area-inset-bottom, 0px)); }
+    .topbar{ gap:4px; margin:0 -10px 4px; padding:6px 10px 4px; }
+    .year-title{ font-size:15px; }
+    .year-title.pickable::after, .year-title.pickable::before{ font-size:17px; line-height:1; vertical-align:-1px; margin-left:2px; }   /* bigger date-picker triangle */
+    .year-title.pickable::before{ content:"\00a0\25BE"; visibility:hidden; font-weight:400; }   /* invisible twin of the triangle on the left: the date text itself sits exactly centred, the triangle hangs beside it */
+    .year-title.yv.pickable::before{ display:none; }   /* Year view: the year and its triangle are centred together as one unit */
+    .year-title.yv.pickable::after{ font-size:14px; vertical-align:2px; margin-left:4px; }
+    #todayBtn{ padding:4px 9px; font-size:12px; }
+    #prevYear, #nextYear{ width:26px; height:26px; }
+    .view-mode-row .top-actions{ gap:4px; }
+
+    .cal-strip{ gap:2px; margin:0 -10px; padding:0 10px 2px; }
+    .cs-item{ min-width:36px; gap:2px; padding:4px 3px 3px; border-radius:10px; }
+    .cs-item .cs-top{ font-size:10px; }
+    .cs-item .cs-num{ font-size:14px; }
+    .cs-item::after{ width:3px; height:3px; }
+    .cs-item.mon{ min-width:46px; }
+    .cs-item.mon .cs-num{ font-size:12.5px; }
+    /* top-bar < > removed: arrows now sit left/right of the chip strip; the active chip is always centred */
+    #prevYear, #nextYear{ display:none !important; }
+    .cal-nav{ display:flex; align-items:center; order:10; flex:1 1 100%; min-width:0; max-width:calc(100% + 12px); gap:0; margin:2px -6px 0; }
+    .cal-nav .cal-strip{ flex:1 1 auto; min-width:0; order:0; margin:0; padding:0 0 2px; }
+    .cal-strip::before, .cal-strip::after{ content:""; flex:none; width:var(--cs-pad, 0px); }   /* spacers: even the first/last chip can reach the middle */
+    .cs-nav{ display:flex; flex:none; align-items:center; justify-content:center; width:26px; height:36px; padding:0; border:none; background:transparent;
+      color:var(--muted); font-size:22px; line-height:1; cursor:pointer; -webkit-tap-highlight-color:transparent; }
+    .cs-nav:active{ color:var(--text); }
+    .cs-item{ transition:background-color .18s, color .18s, opacity .18s; }
+    .cs-item.ghost{ opacity:.35; }   /* previous / next year, month or day around the current one */
+    .month-pop{ left:10px; right:10px; padding:8px; border-radius:14px; }
+    .mp-head{ margin-bottom:4px; font-size:14px; }
+    .mp-yb{ width:28px; height:28px; font-size:19px; }
+    .mp-grid{ gap:4px; }
+    .mp-m{ padding:8px 0; font-size:13px; border-radius:10px; }
+    .mp-d{ font-size:13px; }
+    .mp-today{ padding:7px 0; margin-top:6px; font-size:13px; }
+    #todayBtn{ display:none !important; }   /* Today moved into the title picker */
+    .year-title{ text-align:center; }   /* date title centred in the top bar */
+    .topbar > .view-mode-row{ position:absolute; top:0; right:0; width:0; height:0; margin:0; padding:0; overflow:visible; }   /* out of the flex flow (its fixed Year/Month/Day dock still works): it used to eat 2px + a gap on the right and pushed the title ~3px off-centre */
+
+    .mob-feed{ gap:6px; padding:6px 0 2px; }
+    .mf-hour{ margin:4px 2px -2px; font-size:12px; gap:8px; }
+    .mf-tag{ padding:1px 7px; font-size:10px; }
+    .mf-chev{ font-size:17px; }
+    .mf-chev i{ font-size:10px; padding:0 5px; }
+    .mf-empty{ padding:24px 10px; font-size:13px; }
+    .mf-none{ font-size:12px; }
+    .mf-link{ padding:6px 11px; font-size:12.5px; }
+    .mcard{ min-height:0; gap:2px; padding:8px 40px 8px 12px; border-radius:12px; font-size:14px; }
+    .mcard.has-amount{ padding-bottom:8px; }
+    /* all-day square cards (Day view) */
+    .mcard.sq{ flex:none; position:relative; width:83px; height:83px; min-height:0; box-sizing:border-box; padding:7px 7px 22px; gap:2px; border-radius:12px; overflow:hidden; scroll-snap-align:start; justify-content:flex-start; }
+    .mcard.sq .ev-title{ display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:3; overflow:hidden; font-size:12px; line-height:1.25; }
+    .mcard.sq .note-preview{ display:none; }
+    .mcard.sq .amount-preview{ position:absolute; left:7px; bottom:5px; margin:0; font-size:10px; }
+    .mcard.sq > .done-btn{ top:auto; bottom:0; right:0; width:28px; height:28px; }
+    .mcard.sq .time-preview{ font-size:10px; }
+    /* timed-plans link (Month view): line on the left, italic text on the right */
+    .mf-timed{ display:flex; align-items:center; gap:10px; width:100%; margin:6px 0 0; padding:4px 2px; border:none; background:transparent; color:var(--accent-fg); font:inherit; font-size:12.5px; cursor:pointer; -webkit-tap-highlight-color:transparent; }
+    .mf-timed .mf-line{ flex:1; height:1px; background:var(--border); }
+    .mf-timed i{ flex:none; font-style:italic; font-weight:500; }
+    /* Month view: smaller card text */
+    .mob-feed.is-month .mcard{ font-size:12.5px; min-height:40px; justify-content:center; padding:6px 36px 6px 11px; border-radius:11px; }
+    .mob-feed.is-month .mcard .time-preview, .mob-feed.is-month .mcard .amount-preview{ font-size:10px; }
+    .mob-feed.is-month .mcard .note-preview{ font-size:11px; }
+    .mob-feed.is-month .mcard.sq{ min-height:0; justify-content:flex-start; padding:7px 7px 22px; border-radius:12px; }
+    .mob-feed.is-month .mcard.sq .ev-title{ font-size:11px; }
+    .mob-feed.is-month .mcard.sq .time-preview{ font-size:9px; }
+    .mcard .time-preview{ font-size:11px; }
+    .mcard .note-preview{ font-size:12px; -webkit-line-clamp:4; }
+    .mcard .amount-preview{ font-size:11px; margin-top:0; }
+    .mcard > .done-btn{ top:4px; right:5px; width:30px; height:30px; }
+    .mcard.one:not(.sq) > .done-btn{ top:50%; transform:translateY(-50%); }   /* one-line card: tick circle centred (square All-day/month/year cards unchanged) */
+    .mcard .done-dot{ width:18px; height:18px; }
+    .mcard .done-dot svg{ width:10px; height:10px; }
+
+    .seg.view-seg{ padding:4px; gap:2px; }
+    .seg.view-seg button{ font-size:13px; }
+    .view-thumb{ top:4px; bottom:4px; }
+    #addBtn::before{ width:16px; height:16px; }
+
+    /* ===== ADD/EDIT FORM on phone: full-screen sheet, title + X pinned at the top, Save/Cancel pinned at the bottom ===== */
+    .overlay{ align-items:stretch; justify-content:stretch; }
+    .overlay.open{ background:var(--surface); }
+    .modal.modal-wide{
+      position:relative; width:100vw; max-width:none; height:100vh; height:100dvh; max-height:none;
+      border-radius:0; box-shadow:none; padding:0; overflow-y:auto; overscroll-behavior:contain;
+      display:flex; flex-direction:column;
+      transform:translateY(28px); transition:transform .22s ease-out, opacity .18s ease-out;
+    }
+    .overlay.open .modal.modal-wide{ transform:none; }
+    .modal-wide h3{
+      position:sticky; top:0; z-index:3; flex:none; margin:0; background:var(--surface); border-bottom:1px solid var(--border);
+      padding:calc(12px + env(safe-area-inset-top, 0px)) 56px 12px 16px; font-size:16px; line-height:30px;
+    }
+    .modal-wide .modal-x{
+      display:flex; align-items:center; justify-content:center; position:fixed; z-index:4;
+      top:calc(10px + env(safe-area-inset-top, 0px)); right:12px; width:34px; height:34px;
+      padding:0; border:0; border-radius:50%; background:var(--chip-bg); color:var(--text); font-size:15px; line-height:1; cursor:pointer;
+    }
+    .modal-wide .modal-x:active{ background:var(--border); }
+    .modal-wide .modal-cols{ flex:1 0 auto; align-content:start; padding:14px 16px 8px; }
+    .modal-wide .modal-actions{
+      position:sticky; bottom:0; z-index:3; flex:none; margin:0; background:var(--surface); border-top:1px solid var(--border);
+      padding:10px 16px calc(10px + env(safe-area-inset-bottom, 0px));
+    }
+    .modal-wide .modal-note textarea{ height:120px; }
+    .field input[type=text], .field input[type=time], .field select, .field textarea{ font-size:14px; }
+    @supports (-webkit-touch-callout:none){   /* iOS only: below 16px Safari zooms the page on focus */
+      .field input[type=text], .field input[type=time], .field select, .field textarea{ font-size:16px; }
+    }
+    .modal-wide h3{ font-size:15px; }
+    .modal-wide .field label{ font-size:12px; }
+    .modal-wide .btn{ font-size:13px; }
+    .modal-wide .seg button{ font-size:12.5px; }
+
+    /* ===== SUMMARY (keuangan) on phone: full-screen sheet, stat cards + 2-line rows instead of a sideways table ===== */
+    .recap-side{ height:100vh; height:100dvh; }
+    .recap-side.open{ width:100%; border-left:0; }   /* % not vw: 100vw includes the page scrollbar (Year view) and pushed the sheet off-screen */
+    .recap-inner{ width:100%; box-sizing:border-box; padding:calc(8px + env(safe-area-inset-top, 0px)) 10px calc(8px + env(safe-area-inset-bottom, 0px)); }
+    .recap-head{ margin-bottom:6px; }
+    .recap-head h3{ font-size:15px; }
+    .recap-close{ width:30px; height:30px; font-size:14px; }
+    .recap-summary{ display:grid; grid-template-columns:1fr 1fr; gap:5px; margin-bottom:6px; }
+    .recap-stat{ min-width:0; padding:6px 10px; border-radius:10px; }
+    .recap-stat .label{ font-size:10px; margin-bottom:1px; }
+    .recap-stat .value{ font-size:13.5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .recap-stat.net{ grid-column:1 / -1; order:-1; display:flex; align-items:baseline; justify-content:space-between; gap:8px; }
+    .recap-stat.net .label{ margin:0; }
+    .recap-stat.net .value{ font-size:17px; }
+    .recap-table-wrap{ border:0; border-radius:0; overflow-x:hidden; margin:0 -10px; padding:0 10px; }
+    .recap-thead{ display:none; }
+    .recap-trow{ min-width:0; grid-template-columns:30px minmax(0,1fr) auto; grid-template-areas:"mo ti am" ". no sa"; gap:1px 8px; padding:6px 0; align-items:center; }
+    .recap-trow:first-of-type{ border-top:0; }
+    .recap-trow .rmonth{ grid-area:mo; font-size:11px; }
+    .recap-trow .rtitle{ grid-area:ti; font-size:13.5px; }
+    .recap-trow .rin, .recap-trow .rout{ grid-area:am; font-size:13.5px; }
+    .recap-trow .rsaldo{ grid-area:sa; font-size:11px; font-weight:600; color:var(--muted); }
+    .recap-trow .rsaldo::before{ content:attr(data-lbl) " "; font-weight:500; }
+    .recap-trow .rnote{ grid-area:no; font-size:12px; padding:2px 4px; margin-left:-4px; width:calc(100% + 4px); }
+    .recap-trow .rnote::placeholder{ color:var(--muted); opacity:.5; }
+  }
 
   /* status dot pulse (profile card) */
   @keyframes drive-pulse{ 0%,100%{ opacity:1; } 50%{ opacity:.3; } }
@@ -770,10 +1284,13 @@ try{
       <input id="planInput" type="text" placeholder="Add a new plan..." data-i18n-ph="plan.placeholder">
       <button id="planAddBtn" title="Add plan" data-i18n-title="plan.add">+</button>
     </div>
-    <div class="plan-list-title" id="planListTitle">Plans</div>
+    <div class="plan-title-row">
+      <button type="button" class="plan-plus" id="planPlusBtn" title="Add plan" aria-label="Add plan" data-i18n-title="plan.add">+</button>
+      <div class="plan-list-title" id="planListTitle">Plans</div>
+      <button type="button" class="plan-fold" id="planFoldBtn" aria-label="Show / hide plans" aria-expanded="true"><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="9 5 16 12 9 19"/></svg></button>
+    </div>
     <div id="planList"></div>
     <div class="hint" data-i18n="hint">Drag a plan onto the calendar to add a new event.</div>
-    <button class="archive-btn" id="archiveBtn" type="button"><span data-i18n="arch.title">Archive</span><span class="archive-count" id="archiveCount">0</span></button>
     <div class="profile" id="settingsBtn" role="button" tabindex="0" data-state="idle" aria-label="Settings">
       <div class="pf-avatar" id="pfAvatar">
         <span id="pfInitial"></span>
@@ -805,7 +1322,8 @@ try{
           </button>
           <button class="btn btn-primary" id="addBtn" data-i18n="event.addBtn">+ Add Event</button>
           <button class="recap-tab" id="recapBtn" title="Summary" aria-label="Summary" data-i18n-title="summary">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5.5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H7"/></svg>
+            <svg class="ic-dsk" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5.5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H7"/></svg>
+            <svg class="ic-mob" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M15.5 8.5h-5a1.75 1.75 0 0 0 0 3.5h3a1.75 1.75 0 0 1 0 3.5H8.5"/><path d="M12 6.5v11"/></svg>
           </button>
         </div>
       </div>
@@ -817,12 +1335,13 @@ try{
           <button class="nav-btn" id="nextYear">&#8250;</button>
           <div class="year-title" id="yearTitle">2026</div>
         </div>
-        <div class="top-actions">
-        </div>
       </div>
+      <div class="cal-nav" id="calNav"><button type="button" class="cs-nav" id="csPrev" aria-label="Previous">&#8249;</button><div class="cal-strip" id="calStrip"></div><button type="button" class="cs-nav" id="csNext" aria-label="Next">&#8250;</button></div>
+      <div class="month-pop" id="monthPop" hidden></div>
     </div>
 
     <div class="grid" id="grid"></div>
+    <div class="mob-feed" id="mobFeed"></div>
   </div>
 
   <!-- Recap right sidebar -->
@@ -842,6 +1361,7 @@ try{
   <div class="overlay" id="overlay">
     <div class="modal modal-wide">
       <h3 id="modalTitle">Add Event</h3>
+      <button class="modal-x" id="modalX" type="button" aria-label="Close" title="Close">✕</button>
       <div class="modal-cols">
       <div class="modal-col">
       <div class="field">
@@ -908,19 +1428,22 @@ try{
       </div>
       </div>
       <div class="modal-actions">
-        <button class="link-danger" id="deleteBtn" style="display:none;" data-i18n="event.delete">Delete event</button>
-        <div class="right">
-          <button class="btn" id="cancelBtn" data-i18n="cancel">Cancel</button>
+        <div class="right rev">
           <button class="btn btn-primary" id="saveBtn" data-i18n="save">Save</button>
+          <button class="btn" id="cancelBtn" data-i18n="cancel">Cancel</button>
         </div>
+        <button class="link-danger" id="deleteBtn" style="display:none;" data-i18n="event.delete">Delete event</button>
       </div>
     </div>
   </div>
 
   <!-- Plan modal -->
   <div class="overlay" id="planOverlay">
-    <div class="modal">
+    <div class="modal modal-wide">
       <h3 data-i18n="plan.edit">Edit Plan</h3>
+      <button class="modal-x" id="pModalX" type="button" aria-label="Close" title="Close">✕</button>
+      <div class="modal-cols">
+      <div class="modal-col">
       <div class="field">
         <label data-i18n="plan.name">Plan name</label>
         <input type="text" id="pName" placeholder="e.g. Driving lessons" data-i18n-ph="plan.namePh">
@@ -933,16 +1456,20 @@ try{
         <label class="amount-label">Amount (Rp)</label>
         <input type="text" id="pAmount" inputmode="text" placeholder="">
       </div>
-      <div class="field">
-        <label data-i18n="note">Note</label>
-        <textarea id="pNote" rows="3" placeholder="Add a note for this plan..." data-i18n-ph="plan.notePh"></textarea>
+      </div>
+      <div class="modal-col modal-note">
+        <div class="field">
+          <label data-i18n="note">Note</label>
+          <textarea id="pNote" placeholder="Add a note for this plan..." data-i18n-ph="plan.notePh"></textarea>
+        </div>
+      </div>
       </div>
       <div class="modal-actions">
-        <button class="link-danger" id="pDeleteBtn" data-i18n="plan.delete">Delete plan</button>
-        <div class="right">
-          <button class="btn" id="pCancelBtn" data-i18n="cancel">Cancel</button>
+        <div class="right rev">
           <button class="btn btn-primary" id="pSaveBtn" data-i18n="save">Save</button>
+          <button class="btn" id="pCancelBtn" data-i18n="cancel">Cancel</button>
         </div>
+        <button class="link-danger" id="pDeleteBtn" data-i18n="plan.delete">Delete plan</button>
       </div>
     </div>
   </div>
@@ -953,11 +1480,25 @@ try{
       <h3 id="settingsTitle" data-i18n="set.title">Settings</h3>
 
       <section class="s-section">
-        <h4 data-i18n="set.drive">Google Drive</h4>
-        <p class="s-note" data-i18n="set.driveHint">Sign in to back up and sync your planner across devices.</p>
-        <button class="btn" id="sDriveLoginBtn" data-i18n="set.driveLogin">Sign in to Google Drive</button>
-        <button class="btn" id="sDriveLogoutBtn" data-i18n="drive.disconnect" style="display:none;">Disconnect</button>
-        <p class="s-note" id="sDriveStatus"></p>
+        <h4 data-i18n="set.language">Language</h4>
+        <div class="seg" id="sLang"></div>
+        <div class="s-hint" id="sLangHint" hidden></div>
+      </section>
+
+      <section class="s-section">
+        <h4 data-i18n="set.appearance">Appearance</h4>
+        <div class="field">
+          <label data-i18n="set.theme">Theme</label>
+          <div class="seg" id="sTheme"></div>
+        </div>
+        <div class="field">
+          <label data-i18n="set.accent">Accent color</label>
+          <div class="swatches" id="sAccent"></div>
+        </div>
+        <div class="field">
+          <label data-i18n="set.density">Density</label>
+          <div class="seg" id="sDensity"></div>
+        </div>
       </section>
 
       <section class="s-section">
@@ -980,31 +1521,16 @@ try{
       </section>
 
       <section class="s-section">
-        <h4 data-i18n="set.language">Language</h4>
-        <div class="seg" id="sLang"></div>
-        <div class="s-hint" id="sLangHint" hidden></div>
-      </section>
-
-      <section class="s-section">
-        <h4 data-i18n="set.appearance">Appearance</h4>
-        <div class="field">
-          <label data-i18n="set.theme">Theme</label>
-          <div class="seg" id="sTheme"></div>
-        </div>
-        <div class="field">
-          <label data-i18n="set.accent">Accent color</label>
-          <div class="accent-row"><span data-i18n="set.accentMain">Main</span><div class="swatches" id="sAccent"></div></div>
-          <div class="accent-row"><span data-i18n="set.accentMoney">Money</span><div class="swatches" id="sMoney"></div></div>
-        </div>
-        <div class="field">
-          <label data-i18n="set.density">Density</label>
-          <div class="seg" id="sDensity"></div>
-        </div>
-      </section>
-
-      <section class="s-section">
         <h4 data-i18n="set.completed">Completed cards</h4>
         <div class="seg" id="sHideDone"></div>
+      </section>
+
+      <section class="s-section">
+        <h4 data-i18n="set.drive">Google Drive</h4>
+        <p class="s-note" data-i18n="set.driveHint">Sign in to back up and sync your planner across devices.</p>
+        <button class="btn" id="sDriveLoginBtn" data-i18n="set.driveLogin">Sign in to Google Drive</button>
+        <button class="btn" id="sDriveLogoutBtn" data-i18n="drive.disconnect" style="display:none;">Disconnect</button>
+        <p class="s-note" id="sDriveStatus"></p>
       </section>
 
       <section class="s-section">
@@ -1023,7 +1549,7 @@ try{
 <script>
 (function(){
   // ---------- settings: defaults & lookup tables ----------
-  const DEFAULT_SETTINGS = { lang:"en", currency:"IDR", numFormat:"dot", decimals:0, theme:"light", accent:"blue", moneyAccent:"green", density:"comfortable", hideDone:false, doneMode:"show" };
+  const DEFAULT_SETTINGS = { lang:"en", currency:"IDR", numFormat:"dot", decimals:0, theme:"light", accent:"blue", density:"comfortable", hideDone:false, doneMode:"show" };
 
   const CURRENCIES = {
     IDR:{symbol:"Rp", space:true},  USD:{symbol:"$"},   EUR:{symbol:"€"},   GBP:{symbol:"£"},
@@ -1040,11 +1566,7 @@ try{
   // fill = colour used on fills; dark = lighter variant used as text on dark backgrounds
   const ACCENTS = {
     blue:{fill:"#1a73e8", dark:"#8ab4f8"}, indigo:{fill:"#3f51b5", dark:"#9fa8da"}, purple:{fill:"#8e24aa", dark:"#ce93d8"},
-    rose:{fill:"#d81b60", dark:"#f48fb1"}, orange:{fill:"#d9600a", dark:"#fdab5e"}, teal:{fill:"#00897b", dark:"#4db6ac"}
-  };
-  const MONEY_ACCENTS = {
-    green:{fill:"#0d8043", dark:"#81c995"}, teal:{fill:"#00796b", dark:"#4db6ac"}, blue:{fill:"#1a73e8", dark:"#8ab4f8"},
-    purple:{fill:"#8e24aa", dark:"#ce93d8"}, orange:{fill:"#d9600a", dark:"#fdab5e"}, graphite:{fill:"#5f6368", dark:"#bdc1c6"}
+    rose:{fill:"#d81b60", dark:"#f48fb1", warm:true}, orange:{fill:"#d9600a", dark:"#fdab5e", warm:true}, teal:{fill:"#00897b", dark:"#4db6ac"}
   };
   const MONTH_NAMES = {
     en:["January","February","March","April","May","June","July","August","September","October","November","December"],
@@ -1059,20 +1581,20 @@ try{
 
   const I18N = {
     en:{
-      "view.label":"View mode:","view.year":"Year","view.month":"Month","view.day":"Day","day.backMonth":"‹ Month","day.empty":"No events on this day yet. Click to add one.",
+      "view.label":"View mode:","view.year":"Year","view.month":"Month","view.day":"Day","day.backMonth":"‹ Month",
       "scope.year":"Year","scope.month":"Month","scope.day":"Day",
-      "plans.base":"Unsorted Plans","day.back":"‹ Year","day.addTitle":"Click to add an event on this date","day.notes":"Monthly notes","day.notesPh":"Write notes for this month...","event.startDay":"Start day (optional)","event.endDay":"End day (optional)","plan.placeholder":"Add a new plan...","plan.add":"Add plan","hint":"Drag a plan onto the calendar to add a new event.",
-      "settings":"Settings","today":"Today","event.addBtn":"+ Add Event","summary":"Summary","close":"Close",
+      "plans.base":"Unsorted Plans","day.back":"‹ Year","day.addTitle":"Click to add an event on this date","event.startDay":"Start day (optional)","event.endDay":"End day (optional)","plan.placeholder":"Add a new plan...","plan.add":"Add plan","hint":"Drag a plan onto the calendar to add a new event.",
+      "today":"Today","event.addBtn":"+ Add Event","summary":"Summary","close":"Close",
       "event.add":"Add Event","event.edit":"Edit Event","event.title":"Event title","event.titlePh":"e.g. Annual meeting",
       "event.start":"Start month","event.month":"Month","event.end":"End month","color":"Color","amount":"Amount",
       "amountPh":"e.g. 1500000, -500000, or @-2000 (monthly)","amountPhDec":"e.g. 1500{d}50, -500{d}25, or @-20{d}5 (monthly)",
       "planAmountPh":"e.g. 1500000 or -500000","planAmountPhDec":"e.g. 1500{d}50 or -500{d}25",
       "note":"Note","event.notePh":"Add a note for this event...","event.delete":"Delete event","cancel":"Cancel","save":"Save",
       "event.allDay":"All day","event.startTime":"Start time","event.endTime":"End time","day.allDay":"All day","day.addTimeTitle":"Click to add an event at this time","recap.empty":"No plan yet. Drop here to add one.",
-      "task.title":"Daily Plan","task.count":"Number of daily plans","task.notePh":"Write a note for this month...",
+      
       "task.one":"{n} daily plan","task.many":"{n} daily plans",
-      "task.hasNote":"Has a note — click to open the daily view","task.edit":"Click to open the daily view",
-      "month.timedPlan":"Timed Plan","month.allMonth":"All month","year.wholeYear":"All year",
+      "task.edit":"Click to open the daily view",
+      "month.allMonth":"All month","year.wholeYear":"All year",
       "timed.one":"{n} timed plan","timed.many":"{n} timed plans","timed.none":"0 timed plans","timed.edit":"Click to open the daily view",
       "plan.edit":"Edit Plan","plan.name":"Plan name","plan.namePh":"e.g. Driving lessons","plan.notePh":"Add a note for this plan...",
       "plan.delete":"Delete plan","plan.empty.year":"No yearly plans yet. Add one using the field above.","plan.empty.month":"No monthly plans yet. Add one using the field above.","plan.empty.day":"No daily plans yet. Add one using the field above.",
@@ -1081,30 +1603,30 @@ try{
       "rc.month":"Month","rc.event":"Event","rc.in":"In","rc.out":"Out","rc.balance":"Balance","rc.note":"Note","rc.notePh":"Add note…",
       "ev.perMonthTitle":"/month. ","ev.perMonthShort":"/mo","ev.notePrefix":"Note: ","ev.hint":"Drag to move, click to edit",
       "month.addTitle":"Click to add an event this month",
-      "set.title":"Settings","done":"Done","priority":"Priority (I = highest)","pri.high":"High","pri.normal":"Normal","pri.low":"Low","scroll.more":"More cards to the right","ev.markDone":"Mark as done","ev.markUndone":"Mark as not done","set.completed":"Completed cards","set.show":"Show","set.hide":"Hide","set.sample":"Sample data","set.drive":"Google Drive","set.driveHint":"Sign in to back up and sync your planner across devices.","set.driveLogin":"Sign in to Google Drive","set.sampleHint":"Deletes ALL your current cards and plans (every year) and replaces them with examples that show every feature. Your settings are kept.","set.sampleAdd":"Delete all & load samples","set.sampleConfirm":"Click again to delete everything","set.money":"Currency and number format","set.currency":"Currency","set.numFormat":"Number format",
+      "set.title":"Settings","done":"Done","priority":"Priority (I = highest)","scroll.more":"More cards to the right","ev.markDone":"Mark as done","ev.markUndone":"Mark as not done","set.completed":"Completed cards","set.show":"Show","set.hide":"Hide","set.sample":"Sample data","set.drive":"Google Drive","set.driveHint":"Sign in to back up and sync your planner across devices.","set.driveLogin":"Sign in to Google Drive","set.sampleHint":"Deletes ALL your current cards and plans (every year) and replaces them with examples that show every feature. Your settings are kept.","set.sampleAdd":"Delete all & load samples","set.sampleConfirm":"Click again to delete everything","set.money":"Currency and number format","set.currency":"Currency","set.numFormat":"Number format",
       "set.decimals":"Decimals","dec.0":"Whole numbers","dec.2":"2 places","set.preview":"Preview","cur.none":"No symbol",
       "set.language":"Language","set.archive":"Archive","arch.title":"Archive","arch.empty":"Nothing archived yet.","arch.restore":"Restore","arch.delete":"Delete","arch.restoreAll":"Restore all","arch.emptyAll":"Empty archive","arch.plans":"Plans","arch.toast":"Archived","arch.undo":"Undo","arch.confirmDelete":"Delete this item permanently?","arch.confirmEmpty":"Permanently delete all {n} archived items?","arch.confirmSwitch":"Archive {n} completed card(s) now?\n\nOK = move them to the archive\nCancel = keep them where they are (only cards you complete from now on will be archived)","plan.done":"Done: move to archive","set.langHybridHint":"Hybrid: English interface, with month and day names in Indonesian.","set.appearance":"Appearance","set.theme":"Theme","theme.light":"Light","theme.dark":"Dark","theme.system":"System",
-      "set.accent":"Accent color","set.accentMain":"Main","set.accentMoney":"Money","set.density":"Density",
+      "set.accent":"Accent color","set.density":"Density",
       "density.comfortable":"Comfortable","density.compact":"Compact","set.reset":"Reset to defaults","set.done":"Done",
-      "ac.blue":"Blue","ac.indigo":"Indigo","ac.purple":"Purple","ac.rose":"Rose","ac.orange":"Orange","ac.teal":"Teal","ac.green":"Green","ac.graphite":"Graphite",
+      "ac.blue":"Blue","ac.indigo":"Indigo","ac.purple":"Purple","ac.rose":"Rose","ac.orange":"Orange","ac.teal":"Teal",
       "drive.disconnect":"Disconnect Google Drive","pf.guest":"Guest","pf.user":"Google account","drive.connect":"Connect Google Drive","drive.connecting":"Connecting…","drive.saving":"Saving…","drive.synced":"Synced to Drive","drive.error":"Sync error — click to retry","drive.reconnect":"Reconnect Drive","drive.setup":"Drive sync not set up",
       "drive.landing.title":"Sync with Google Drive","drive.landing.desc":"Sign in to keep your planner backed up and synced across devices.","drive.landing.expiredTitle":"Your session expired","drive.landing.expiredDesc":"Sign in again to keep syncing with Google Drive.","drive.landing.connecting":"Opening Google sign-in…","drive.landing.failed":"Sign-in failed or was cancelled. Try again, or continue without Drive.","drive.landing.signin":"Sign in with Google","guest.banner":"Guest mode — please sign in via Settings to back up & sync your data.","guest.signin":"Sign in","drive.refresh":"Refresh login","drive.landing.f1":"Automatic backup","drive.landing.f2":"Synced on every device","drive.landing.f3":"Stored in a private app folder","drive.landing.admin":"To sign in with Drive, please contact the administrator.","drive.landing.skip":"Continue without Drive"
     },
     id:{
-      "view.label":"Mode tampilan:","view.year":"Tahun","view.month":"Bulan","view.day":"Hari","day.backMonth":"‹ Bulan","day.empty":"Belum ada acara di tanggal ini. Klik untuk menambah.",
+      "view.label":"Mode tampilan:","view.year":"Tahun","view.month":"Bulan","view.day":"Hari","day.backMonth":"‹ Bulan",
       "scope.year":"Tahun","scope.month":"Bulan","scope.day":"Hari",
-      "plans.base":"Rencana Belum Diurutkan","day.back":"‹ Tahun","day.addTitle":"Klik untuk menambah acara di tanggal ini","day.notes":"Catatan bulanan","day.notesPh":"Tulis catatan untuk bulan ini...","event.startDay":"Tanggal mulai (opsional)","event.endDay":"Tanggal selesai (opsional)","plan.placeholder":"Tambah rencana baru...","plan.add":"Tambah rencana","hint":"Seret rencana ke kalender untuk menambah acara baru.",
-      "settings":"Pengaturan","today":"Hari ini","event.addBtn":"+ Tambah acara","summary":"Ringkasan","close":"Tutup",
+      "plans.base":"Rencana Belum Diurutkan","day.back":"‹ Tahun","day.addTitle":"Klik untuk menambah acara di tanggal ini","event.startDay":"Tanggal mulai (opsional)","event.endDay":"Tanggal selesai (opsional)","plan.placeholder":"Tambah rencana baru...","plan.add":"Tambah rencana","hint":"Seret rencana ke kalender untuk menambah acara baru.",
+      "today":"Hari ini","event.addBtn":"+ Tambah acara","summary":"Ringkasan","close":"Tutup",
       "event.add":"Tambah acara","event.edit":"Ubah acara","event.title":"Nama acara","event.titlePh":"mis. Rapat tahunan",
       "event.start":"Bulan mulai","event.month":"Bulan","event.end":"Bulan selesai","color":"Warna","amount":"Nominal",
       "amountPh":"mis. 1500000, -500000, atau @-2000 (bulanan)","amountPhDec":"mis. 1500{d}50, -500{d}25, atau @-20{d}5 (bulanan)",
       "planAmountPh":"mis. 1500000 atau -500000","planAmountPhDec":"mis. 1500{d}50 atau -500{d}25",
       "note":"Catatan","event.notePh":"Tambahkan catatan untuk acara ini...","event.delete":"Hapus acara","cancel":"Batal","save":"Simpan",
       "event.allDay":"Sepanjang hari","event.startTime":"Waktu mulai","event.endTime":"Waktu selesai","day.allDay":"Sepanjang hari","day.addTimeTitle":"Klik untuk menambah acara di jam ini","recap.empty":"Belum ada rencana. Drop di sini untuk menambah.",
-      "task.title":"Rencana harian","task.count":"Jumlah rencana harian","task.notePh":"Tulis catatan untuk bulan ini...",
+      
       "task.one":"{n} rencana harian","task.many":"{n} rencana harian",
-      "task.hasNote":"Ada catatan — klik untuk membuka tampilan harian","task.edit":"Klik untuk membuka tampilan harian",
-      "month.timedPlan":"Rencana berwaktu","month.allMonth":"Sepanjang bulan","year.wholeYear":"Sepanjang tahun",
+      "task.edit":"Klik untuk membuka tampilan harian",
+      "month.allMonth":"Sepanjang bulan","year.wholeYear":"Sepanjang tahun",
       "timed.one":"{n} rencana berwaktu","timed.many":"{n} rencana berwaktu","timed.none":"0 rencana berwaktu","timed.edit":"Klik untuk membuka tampilan harian",
       "plan.edit":"Ubah rencana","plan.name":"Nama rencana","plan.namePh":"mis. Kursus mengemudi","plan.notePh":"Tambahkan catatan untuk rencana ini...",
       "plan.delete":"Hapus rencana","plan.empty.year":"Belum ada rencana tahunan. Tambahkan lewat kolom di atas.","plan.empty.month":"Belum ada rencana bulanan. Tambahkan lewat kolom di atas.","plan.empty.day":"Belum ada rencana harian. Tambahkan lewat kolom di atas.",
@@ -1113,12 +1635,12 @@ try{
       "rc.month":"Bulan","rc.event":"Acara","rc.in":"Masuk","rc.out":"Keluar","rc.balance":"Saldo","rc.note":"Catatan","rc.notePh":"Tambah catatan…",
       "ev.perMonthTitle":"/bulan. ","ev.perMonthShort":"/bln","ev.notePrefix":"Catatan: ","ev.hint":"Seret untuk memindahkan, klik untuk mengubah",
       "month.addTitle":"Klik untuk menambah acara di bulan ini",
-      "set.title":"Pengaturan","done":"Selesai","priority":"Prioritas (I = tertinggi)","pri.high":"Tinggi","pri.normal":"Normal","pri.low":"Rendah","scroll.more":"Ada card lain di kanan","ev.markDone":"Tandai selesai","ev.markUndone":"Batalkan selesai","set.completed":"Card yang selesai","set.show":"Tampilkan","set.hide":"Sembunyikan","set.sample":"Data contoh","set.drive":"Google Drive","set.driveHint":"Masuk untuk mencadangkan & menyinkronkan planner kamu di semua perangkat.","set.driveLogin":"Masuk ke Google Drive","set.sampleHint":"MENGHAPUS SEMUA card dan rencana kamu (semua tahun) lalu menggantinya dengan contoh yang menunjukkan semua fitur. Pengaturan tetap tersimpan.","set.sampleAdd":"Hapus semua & muat contoh","set.sampleConfirm":"Klik lagi untuk menghapus semua","set.money":"Mata uang dan format angka","set.currency":"Mata uang","set.numFormat":"Format angka",
+      "set.title":"Pengaturan","done":"Selesai","priority":"Prioritas (I = tertinggi)","scroll.more":"Ada card lain di kanan","ev.markDone":"Tandai selesai","ev.markUndone":"Batalkan selesai","set.completed":"Card yang selesai","set.show":"Tampilkan","set.hide":"Sembunyikan","set.sample":"Data contoh","set.drive":"Google Drive","set.driveHint":"Masuk untuk mencadangkan & menyinkronkan planner kamu di semua perangkat.","set.driveLogin":"Masuk ke Google Drive","set.sampleHint":"MENGHAPUS SEMUA card dan rencana kamu (semua tahun) lalu menggantinya dengan contoh yang menunjukkan semua fitur. Pengaturan tetap tersimpan.","set.sampleAdd":"Hapus semua & muat contoh","set.sampleConfirm":"Klik lagi untuk menghapus semua","set.money":"Mata uang dan format angka","set.currency":"Mata uang","set.numFormat":"Format angka",
       "set.decimals":"Desimal","dec.0":"Bilangan bulat","dec.2":"2 angka","set.preview":"Pratinjau","cur.none":"Tanpa simbol",
       "set.language":"Bahasa","set.archive":"Arsipkan","arch.title":"Arsip","arch.empty":"Belum ada yang diarsipkan.","arch.restore":"Pulihkan","arch.delete":"Hapus","arch.restoreAll":"Pulihkan semua","arch.emptyAll":"Kosongkan arsip","arch.plans":"Plan","arch.toast":"Diarsipkan","arch.undo":"Urungkan","arch.confirmDelete":"Hapus item ini secara permanen?","arch.confirmEmpty":"Hapus permanen semua {n} item arsip?","arch.confirmSwitch":"Arsipkan {n} card yang sudah selesai sekarang?\n\nOK = pindahkan ke arsip\nBatal = biarkan di tempatnya (hanya card yang kamu selesaikan mulai sekarang yang diarsipkan)","plan.done":"Selesai: pindahkan ke arsip","set.appearance":"Tampilan","set.theme":"Tema","theme.light":"Terang","theme.dark":"Gelap","theme.system":"Sistem",
-      "set.accent":"Warna aksen","set.accentMain":"Utama","set.accentMoney":"Keuangan","set.density":"Kerapatan",
+      "set.accent":"Warna aksen","set.density":"Kerapatan",
       "density.comfortable":"Nyaman","density.compact":"Rapat","set.reset":"Kembalikan ke bawaan","set.done":"Selesai",
-      "ac.blue":"Biru","ac.indigo":"Nila","ac.purple":"Ungu","ac.rose":"Mawar","ac.orange":"Oranye","ac.teal":"Tosca","ac.green":"Hijau","ac.graphite":"Grafit",
+      "ac.blue":"Biru","ac.indigo":"Nila","ac.purple":"Ungu","ac.rose":"Mawar","ac.orange":"Oranye","ac.teal":"Tosca",
       "drive.disconnect":"Putuskan Google Drive","pf.guest":"Tamu","pf.user":"Akun Google","drive.connect":"Hubungkan Google Drive","drive.connecting":"Menghubungkan…","drive.saving":"Menyimpan…","drive.synced":"Tersinkron ke Drive","drive.error":"Gagal sinkron — klik untuk coba lagi","drive.reconnect":"Sambungkan ulang Drive","drive.setup":"Sinkron Drive belum disetel",
       "drive.landing.title":"Sinkron dengan Google Drive","drive.landing.desc":"Masuk untuk menjaga planner kamu tetap tercadangkan & tersinkron di semua perangkat.","drive.landing.expiredTitle":"Sesi login kamu berakhir","drive.landing.expiredDesc":"Masuk lagi untuk melanjutkan sinkron ke Google Drive.","drive.landing.connecting":"Membuka login Google…","drive.landing.failed":"Login gagal atau dibatalkan. Coba lagi, atau lanjut tanpa Drive.","drive.landing.signin":"Masuk dengan Google","guest.banner":"Mode Guest — silakan sign in lewat Pengaturan untuk cadangan & sinkron data.","guest.signin":"Sign in","drive.refresh":"Segarkan login","drive.landing.f1":"Cadangan otomatis","drive.landing.f2":"Sinkron di semua perangkat","drive.landing.f3":"Disimpan di folder privat aplikasi","drive.landing.admin":"Untuk login menggunakan Drive, silakan hubungi administrator.","drive.landing.skip":"Lanjut tanpa Drive"
     }
@@ -1128,6 +1650,7 @@ try{
   let MONTHS = MONTH_NAMES.en;
   let dayMonth = null;   // null = year view, 1..12 = month/day view of that month
   let viewDay = null;    // null = month view (list of all days), 1..n = single-day view focused on that date
+  let todayGlide = false; // set by the Today button: pause after the pill slide, then glide down to the running hour
   let lastDaySig = null; // "y-m-d" of the day we last auto-scrolled for, so re-renders (editing, etc.) don't keep re-snapping the scroll
   let dayHFloatCleanup = null; // detaches the floating horizontal-scrollbar listeners from the previous render's DOM
   function getViewMode(){ return dayMonth == null ? "year" : (viewDay != null ? "day" : "month"); }
@@ -1148,7 +1671,7 @@ try{
     r.decimals = (Number(r.decimals) === 2) ? 2 : 0;
     if(["light","dark","system"].indexOf(r.theme) < 0) r.theme = DEFAULT_SETTINGS.theme;
     if(!ACCENTS[r.accent]) r.accent = DEFAULT_SETTINGS.accent;
-    if(!MONEY_ACCENTS[r.moneyAccent]) r.moneyAccent = DEFAULT_SETTINGS.moneyAccent;
+    delete r.moneyAccent;   // old saved setting, no longer exists
     if(["comfortable","compact"].indexOf(r.density) < 0) r.density = DEFAULT_SETTINGS.density;
     if(["show","hide","archive"].indexOf(r.doneMode) < 0) r.doneMode = "show";
     if(o && o.doneMode == null && o.hideDone) r.doneMode = "hide";   // settings saved before the Archive option existed
@@ -1156,7 +1679,9 @@ try{
     return r;
   }
   const CHECK_ICON = '<svg class="ev-check" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>';
-  const COLORS = ["tomato","flamingo","tangerine","banana","sage","basil","peacock","blueberry","lavender","grape","graphite"];
+  const COLORS = ["tomato","tangerine","banana","basil","peacock","blueberry","grape","graphite"];
+  // colours removed from the palette -> nearest remaining one (applied to cards, plans and the archive when a store is loaded)
+  const COLOR_MIGRATE = { flamingo:"tomato", sage:"basil", lavender:"blueberry" };
   const STORAGE_KEY = "planner_data_v1";
 
   // ============================================================
@@ -1177,6 +1702,8 @@ try{
   let driveAccessToken = null;
   let driveFileId = null;
   let driveSyncTimer = null;
+  let drivePending = false;   // an upload is scheduled/running: don't pull over it
+  let driveBusy = false;      // a reconcile/pull is running
   let driveState = "idle"; // idle | setup | connecting | saving | synced | error | reconnect
 
   const now = new Date();
@@ -1207,39 +1734,39 @@ try{
     Y(["Kick-off","Kick-off"], "peacock", 1, 1, { done:true, note:L(["Marked Done: faded, struck through, with a check","Ditandai Selesai: pudar, dicoret, dan bercentang"]) });
     Y(["Monthly focus","Fokus bulanan"], "blueberry", dm, dm);
     Y(["Product launch","Peluncuran produk"], "tomato", 3, 4, { note:L(["Multi-month card: drag its top or bottom edge","Card multi-bulan: tarik tepi atas atau bawahnya"]) });
-    Y(["Bonus","Bonus"], "sage", 6, 6, { amount:5000000 });
+    Y(["Bonus","Bonus"], "basil", 6, 6, { amount:5000000 });
     Y(["Vacation","Liburan"], "tangerine", 7, 7, { amount:-8000000, note:L(["One-off expense","Pengeluaran sekali"]) });
-    Y(["Class A","Kelas A"], "lavender", 8, 8);
-    Y(["Class B","Kelas B"], "lavender", 8, 8, { note:L(["Same colour repeats get alternating shades","Warna sama otomatis diberi gradasi selang-seling"]) });
-    Y(["Class C","Kelas C"], "lavender", 8, 8);
-    ["flamingo","banana","blueberry","grape","tomato","sage","peacock","tangerine"].forEach((c, i)=>{
+    Y(["Class A","Kelas A"], "blueberry", 8, 8);
+    Y(["Class B","Kelas B"], "blueberry", 8, 8, { note:L(["Same colour repeats get alternating shades","Warna sama otomatis diberi gradasi selang-seling"]) });
+    Y(["Class C","Kelas C"], "blueberry", 8, 8);
+    ["graphite","banana","blueberry","grape","tomato","basil","peacock","tangerine"].forEach((c, i)=>{
       Y(["Task " + (i + 1), "Tugas " + (i + 1)], c, 10, 10, i === 0 ? { note:L(["More than fit in a row: extra columns scroll sideways","Lebih dari yang muat: kolom tambahan bisa digeser ke samping"]) } : null);
     });
 
     // daily cards (in month dm)
     D(["Team meeting","Rapat tim"], "peacock", 3, 3, { done:true, note:L(["Single-day card, already done","Card satu hari, sudah selesai"]) });
-    D(["Sprint","Sprint"], "sage", 5, 9, { note:L(["Multi-day card: drag its bottom edge to resize","Card multi-hari: tarik tepi bawahnya untuk mengubah ukuran"]) });
+    D(["Sprint","Sprint"], "basil", 5, 9, { note:L(["Multi-day card: drag its bottom edge to resize","Card multi-hari: tarik tepi bawahnya untuk mengubah ukuran"]) });
     D(["Review","Review"], "grape", 7, 8, { note:L(["Overlapping days sit side by side","Hari yang bersamaan ditaruh berdampingan"]) });
     D(["Pay electricity","Bayar listrik"], "tomato", 12, 12, { amount:-450000, done:true });
     D(["Payday","Gajian"], "basil", 25, 25, { amount:15000000 });
     D(["Deadline","Tenggat"], "banana", 28, 30, { note:L(["Ends on the last day of the month","Berakhir di akhir bulan"]) });
     // timed cards on today's date: open Day mode and click a specific day to see the hourly grid
-    D(["Gym","Olahraga"], "sage", REAL_DAY, REAL_DAY, { startTime:"06:00", endTime:"07:00" });
+    D(["Gym","Olahraga"], "basil", REAL_DAY, REAL_DAY, { startTime:"06:00", endTime:"07:00" });
     D(["Client call","Telepon klien"], "peacock", REAL_DAY, REAL_DAY, { startTime:"10:00", endTime:"11:00", note:L(["Open this day to see the hourly grid — drag to move, drag the bottom edge to resize","Buka tanggal ini untuk melihat grid per jam — tarik untuk memindah, tarik tepi bawah untuk mengubah durasi"]) });
-    D(["Design sync","Sinkronisasi desain"], "lavender", REAL_DAY, REAL_DAY, { startTime:"10:30", endTime:"11:30", note:L(["Overlapping times sit side by side, just like overlapping days","Waktu yang bersamaan ditaruh berdampingan, seperti hari yang bersamaan"]) });
+    D(["Design sync","Sinkronisasi desain"], "blueberry", REAL_DAY, REAL_DAY, { startTime:"10:30", endTime:"11:30", note:L(["Overlapping times sit side by side, just like overlapping days","Waktu yang bersamaan ditaruh berdampingan, seperti hari yang bersamaan"]) });
     D(["Dinner","Makan malam"], "tangerine", REAL_DAY, REAL_DAY, { startTime:"19:00", endTime:"20:30" });
 
     // plans: yearly list
-    P(["Driving lessons","Kursus mengemudi"], "sage", "year");
+    P(["Driving lessons","Kursus mengemudi"], "basil", "year");
     P(["Annual bonus","Bonus tahunan"], "peacock", "year", { amount:5000000 });
     P(["Renovate kitchen","Renovasi dapur"], "tangerine", "year", { note:L(["Has a note: one badge","Punya catatan: satu lencana"]) });
     P(["Trip to Europe","Liburan ke Eropa"], "grape", "year", { amount:-25000000, note:L(["Has a note and an amount: two badges","Punya catatan dan nominal: dua lencana"]) });
     // plans: monthly list (Month view — drag onto a date to create a whole-day card)
-    P(["Morning workout","Olahraga pagi"], "sage", "month");
+    P(["Morning workout","Olahraga pagi"], "basil", "month");
     P(["Weekly groceries","Belanja mingguan"], "banana", "month", { amount:-300000 });
-    P(["Call family","Telepon keluarga"], "lavender", "month", { note:L(["Drag a plan onto a day to make a card","Seret rencana ke tanggal untuk membuat card"]) });
+    P(["Call family","Telepon keluarga"], "blueberry", "month", { note:L(["Drag a plan onto a day to make a card","Seret rencana ke tanggal untuk membuat card"]) });
     // plans: daily list (Day view — drag onto the hourly grid to create a timed card)
-    P(["Gym session","Sesi gym"], "sage", "day");
+    P(["Gym session","Sesi gym"], "basil", "day");
     P(["Client call","Telepon klien"], "peacock", "day", { note:L(["Drag onto the hourly grid to give it a specific time","Seret ke grid per jam untuk memberinya waktu spesifik"]) });
     return { events, plans };
   }
@@ -1255,11 +1782,14 @@ try{
     return buildSample(2026, sampleDayMonth(2026), uiLang()).plans.map((p, i)=> Object.assign(p, { id:"p" + (i + 1) }));
   }
 
-  const COLOR_HEX = {
-    tomato:"#d50000", flamingo:"#e67c73", tangerine:"#f4511e", banana:"#f6bf26",
-    sage:"#33b679", basil:"#0b8043", peacock:"#039be5", blueberry:"#3f51b5",
-    lavender:"#7986cb", grape:"#8e24aa", graphite:"#616161"
+  const COLOR_HEX = {   // light-theme fallback; colorHex() reads the live (theme-aware) CSS variable
+    tomato:"#d50000", tangerine:"#c2410c", banana:"#f6bf26", basil:"#0b8043",
+    peacock:"#0277bd", blueberry:"#3f51b5", grape:"#8e24aa", graphite:"#50565c"
   };
+  function colorHex(name){
+    const v = getComputedStyle(document.documentElement).getPropertyValue("--" + name).trim();
+    return /^#[0-9a-f]{6}$/i.test(v) ? v : (COLOR_HEX[name] || "#0b8043");
+  }
   function darkenHex(hex, percent){
     const num = parseInt(hex.replace("#",""), 16);
     let r = (num >> 16) & 255, g = (num >> 8) & 255, b = num & 255;
@@ -1284,6 +1814,10 @@ try{
       if(typeof pl.name !== "string") pl.name = String(pl.name == null ? "" : pl.name);
     });
     s.settings = normalizeSettings(s.settings);
+    const mc = c => (COLOR_MIGRATE[c] || c);
+    s.plans.forEach(pl=>{ pl.color = mc(pl.color); });
+    Object.keys(s.years || {}).forEach(k=>{ ((s.years[k] && s.years[k].events) || []).forEach(ev=>{ ev.color = mc(ev.color); }); });
+    (s.archive || []).forEach(a=>{ if(a && a.data) a.data.color = mc(a.data.color); });
     // catatan per baris di tabel Summary: kunci "idEvent:bulan" -> teks
     if(!s.recapNotes || typeof s.recapNotes !== "object" || Array.isArray(s.recapNotes)) s.recapNotes = {};
     Object.keys(s.recapNotes).forEach(k=>{ const v = String(s.recapNotes[k] == null ? "" : s.recapNotes[k]); if(v.trim()) s.recapNotes[k] = v; else delete s.recapNotes[k]; });
@@ -1463,7 +1997,7 @@ try{
     if(login) login.style.display = on ? "none" : "";
     if(logout) logout.style.display = on ? "" : "none";
     const sStatus = document.getElementById("sDriveStatus");
-    if(sStatus) sStatus.textContent = map[state] || map.idle;
+    if(sStatus){ sStatus.textContent = state === "idle" ? "" : (map[state] || ""); sStatus.hidden = !sStatus.textContent; }   // signed out: the button already says it
   }
 
   function initDrive(){
@@ -1581,10 +2115,53 @@ try{
     try{ return JSON.parse(text); }catch(e){ return null; }
   }
 
-  async function driveUploadNow(){
+  function driveLastSynced(){ try{ return Number(localStorage.getItem(DRIVE_SYNCED_KEY)) || 0; }catch(e){ return 0; } }
+
+  // Compare this device with Drive and keep ONE side (never a silent overwrite):
+  //  - only Drive changed since the last sync      -> take Drive silently
+  //  - only this device changed                    -> upload
+  //  - both changed, OR first link of a device that already has local changes -> ask, back up the side not kept
+  async function reconcileWithRemote(remote){
+    const remoteTime = remote.updatedAt || 0, localTime = store.updatedAt || 0, lastSynced = driveLastSynced();
+    if(remoteTime === localTime){ try{ localStorage.setItem(DRIVE_SYNCED_KEY, String(localTime)); }catch(e){} return; }
+    let useRemote = remoteTime > localTime;
+    const firstLink = lastSynced === 0;
+    const bothChanged = remoteTime > 0 && localTime > 0 && (firstLink || (remoteTime > lastSynced && localTime > lastSynced));
+    if(bothChanged){
+      const idLang = uiLang() === "id";
+      useRemote = confirm(idLang
+        ? (firstLink ? "Google Drive sudah berisi data, dan perangkat ini punya data sendiri yang belum pernah disinkron.\n\n" : "Data di perangkat ini dan di Google Drive sama-sama berubah sejak sinkron terakhir.\n\n")
+          + "OK = pakai versi Google Drive" + (firstLink ? " (disarankan)" : "") + "\nBatal = pakai versi perangkat ini\n\nVersi yang tidak dipakai disimpan sebagai cadangan di browser ini."
+        : (firstLink ? "Google Drive already has data, and this device has its own data that was never synced.\n\n" : "This device and Google Drive both changed since the last sync.\n\n")
+          + "OK = use the Google Drive version" + (firstLink ? " (recommended)" : "") + "\nCancel = use this device's version\n\nThe version you don't pick is kept as a backup in this browser.");
+    }
+    if(useRemote){
+      try{ localStorage.setItem(DRIVE_BACKUP_KEY, JSON.stringify({ at: Date.now(), kind: "local", data: store })); }catch(e){}
+      store = normalizeLoadedStore(remote);
+      S = store.settings;
+      applyAll();
+      try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(store)); }catch(e){}
+      try{ localStorage.setItem(DRIVE_SYNCED_KEY, String(store.updatedAt || remoteTime)); }catch(e){}
+    } else {
+      try{ localStorage.setItem(DRIVE_BACKUP_KEY, JSON.stringify({ at: Date.now(), kind: "drive", data: remote })); }catch(e){}
+      store.updatedAt = Date.now();   // the local version must win the upload below
+      await driveUploadNow(true);
+    }
+  }
+
+  async function driveUploadNow(skipCheck){
     if(!driveAccessToken || !driveFileId) return;
     setDriveState("saving");
     store.updatedAt = store.updatedAt || Date.now();
+    if(!skipCheck){
+      // another device may have written since our last sync: look before overwriting
+      const remote = await driveDownload(driveFileId);
+      if(remote && typeof remote === "object" && (remote.updatedAt || 0) > driveLastSynced() && remote.updatedAt !== store.updatedAt){
+        await reconcileWithRemote(remote);
+        setDriveState("synced");
+        return;
+      }
+    }
     await driveFetch("https://www.googleapis.com/upload/drive/v3/files/" + driveFileId + "?uploadType=media", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -1598,10 +2175,29 @@ try{
     if(!driveAccessToken || !driveFileId) return;
     clearTimeout(driveSyncTimer);
     setDriveState("saving");
+    drivePending = true;
     driveSyncTimer = setTimeout(()=>{
-      driveUploadNow().catch(err=>{ console.warn("Drive upload failed:", err); setDriveState("error"); });
+      driveUploadNow().catch(err=>{ console.warn("Drive upload failed:", err); setDriveState("error"); })
+        .finally(()=>{ drivePending = false; });
     }, 1200);
   }
+
+  // pull changes made on another device when this tab becomes active again (throttled, never over a pending upload)
+  let driveLastPull = 0;
+  async function driveRefreshFromRemote(){
+    if(driveBusy || drivePending || !driveAccessToken || !driveFileId) return;
+    if(Date.now() - driveLastPull < 15000) return;
+    driveLastPull = Date.now(); driveBusy = true;
+    try{
+      const remote = await driveDownload(driveFileId);
+      if(remote && typeof remote === "object" && (remote.updatedAt || 0) > driveLastSynced() && remote.updatedAt !== store.updatedAt){
+        await reconcileWithRemote(remote); setDriveState("synced");
+      }
+    }catch(err){ console.warn("Drive refresh failed:", err); }
+    driveBusy = false;
+  }
+  document.addEventListener("visibilitychange", ()=>{ if(document.visibilityState === "visible") driveRefreshFromRemote(); });
+  window.addEventListener("online", driveRefreshFromRemote);
 
   async function driveOnConnected(){
     setDriveState("connecting");
@@ -1609,42 +2205,11 @@ try{
       const f = await driveFindOrCreateFile();
       driveFileId = f.id;
       if(f.isNew){
-        await driveUploadNow();
+        await driveUploadNow(true);
       } else {
         const remote = await driveDownload(driveFileId);
-        if(remote && typeof remote === "object"){
-          const remoteTime = remote.updatedAt || 0;
-          const localTime = store.updatedAt || 0;
-          let lastSynced = 0;
-          try{ lastSynced = Number(localStorage.getItem(DRIVE_SYNCED_KEY)) || 0; }catch(e){}
-          // both sides changed since the last successful sync -> a real conflict: ask instead of silently dropping one side
-          let useRemote = remoteTime > localTime;
-          if(lastSynced > 0 && remoteTime > lastSynced && localTime > lastSynced && remoteTime !== localTime){
-            const idLang = uiLang() === "id";
-            useRemote = confirm(idLang
-              ? "Data di perangkat ini dan di Google Drive sama-sama berubah sejak sinkron terakhir.\n\nOK = pakai versi Google Drive\nBatal = pakai versi perangkat ini\n\nVersi yang tidak dipakai disimpan sebagai cadangan di browser ini."
-              : "This device and Google Drive both changed since the last sync.\n\nOK = use the Google Drive version\nCancel = use this device's version\n\nThe version you don't pick is kept as a backup in this browser.");
-            if(!useRemote){
-              try{ localStorage.setItem(DRIVE_BACKUP_KEY, JSON.stringify({ at: Date.now(), kind: "drive", data: remote })); }catch(e){}
-              store.updatedAt = Date.now();   // make sure the local version wins the upload below
-              await driveUploadNow();
-              setDriveState("synced"); driveLoadProfile();
-              return;
-            }
-          }
-          if(useRemote){
-            try{ localStorage.setItem(DRIVE_BACKUP_KEY, JSON.stringify({ at: Date.now(), kind: "local", data: store })); }catch(e){}
-            store = normalizeLoadedStore(remote);
-            S = store.settings;
-            applyAll();
-            try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(store)); }catch(e){}
-            try{ localStorage.setItem(DRIVE_SYNCED_KEY, String(store.updatedAt || remoteTime)); }catch(e){}
-          } else if(localTime > remoteTime){
-            await driveUploadNow();
-          }
-        } else {
-          await driveUploadNow();
-        }
+        if(remote && typeof remote === "object") await reconcileWithRemote(remote);
+        else await driveUploadNow(true);
       }
       setDriveState("synced");
       driveLoadProfile();
@@ -1701,7 +2266,7 @@ try{
 
   // ---------- swatches ----------
   const swatchesEl = document.getElementById("swatches");
-  let selectedColor = "sage";
+  let selectedColor = "basil";
   COLORS.forEach(c=>{
     const b = document.createElement("button");
     b.type="button"; b.className = "swatch-btn " + c;
@@ -1717,12 +2282,12 @@ try{
 
   function setSelectedColor(c){
     selectedColor = c;
-    document.querySelectorAll(".swatch-btn").forEach(x=>x.classList.toggle("selected", x.dataset.color===c));
+    swatchesEl.querySelectorAll(".swatch-btn").forEach(x=>{ x.classList.toggle("selected", x.dataset.color===c); x.tabIndex = x.dataset.color===c ? 0 : -1; });
   }
 
   // ---------- plan modal swatches (separate from agenda modal's) ----------
   const pSwatchesEl = document.getElementById("pSwatches");
-  let selectedPlanColor = "sage";
+  let selectedPlanColor = "basil";
   COLORS.forEach(c=>{
     const b = document.createElement("button");
     b.type="button"; b.className = "swatch-btn " + c;
@@ -1737,7 +2302,7 @@ try{
   });
   function setSelectedPlanColor(c){
     selectedPlanColor = c;
-    pSwatchesEl.querySelectorAll(".swatch-btn").forEach(x=>x.classList.toggle("selected", x.dataset.color===c));
+    pSwatchesEl.querySelectorAll(".swatch-btn").forEach(x=>{ x.classList.toggle("selected", x.dataset.color===c); x.tabIndex = x.dataset.color===c ? 0 : -1; });
   }
 
   // ---------- modal open/close ----------
@@ -1757,7 +2322,7 @@ try{
   function priCls(ev){ const p = Number(ev && ev.prio); return (p === 1 || p === 3 || p === 4) ? " pri-" + p : ""; }
   function setPriority(p){
     selectedPriority = [1,2,3,4].indexOf(Number(p)) >= 0 ? Number(p) : 2;
-    document.querySelectorAll("#fPriority button").forEach(b=> b.classList.toggle("on", Number(b.dataset.p) === selectedPriority));
+    document.querySelectorAll("#fPriority button").forEach(b=>{ const on = Number(b.dataset.p) === selectedPriority; b.classList.toggle("on", on); b.tabIndex = on ? 0 : -1; });
   }
   document.querySelectorAll("#fPriority button").forEach(b=> b.addEventListener("click", ()=> setPriority(b.dataset.p)));
 
@@ -1777,7 +2342,7 @@ try{
     document.getElementById("fNote").value = (prefill && prefill.note) || "";
     document.getElementById("fDone").checked = !!(prefill && prefill.done);
     document.getElementById("fAmount").value = (prefill && prefill.amount != null) ? ((prefill.recurring ? "@" : "") + amountToInput(prefill.amount)) : "";
-    setSelectedColor(prefill && prefill.color || "sage");
+    setSelectedColor(prefill && prefill.color || "basil");
     setPriority(prefill && (prefill.prio != null ? prefill.prio : ({3:1,2:2,1:3})[Number(prefill.priority)]));
     document.getElementById("allDayRow").style.display = modalScope === "day" ? "" : "none";
     const fAllDay = document.getElementById("fAllDay");
@@ -1796,10 +2361,13 @@ try{
 
   document.getElementById("addBtn").addEventListener("click", ()=>{
     // in Day mode, default a new event to the date currently being viewed
-    if(viewDay != null) openModal({startMonth:dayMonth, endMonth:dayMonth, startDay:viewDay, endDay:viewDay});
+    const mobPre = window.__mobAddPrefill && window.__mobAddPrefill();
+    if(mobPre) openModal(mobPre);
+    else if(viewDay != null) openModal({startMonth:dayMonth, endMonth:dayMonth, startDay:viewDay, endDay:viewDay});
     else openModal();
   });
   document.getElementById("cancelBtn").addEventListener("click", closeModal);
+  document.getElementById("modalX").addEventListener("click", closeModal);
   overlay.addEventListener("click", (e)=>{ if(e.target === overlay) closeModal(); });
 
   document.getElementById("saveBtn").addEventListener("click", ()=>{
@@ -1915,22 +2483,15 @@ try{
     if(mode === "month"){ shiftMonth(1); return; }
     store.currentYear++; saveStore(); render();
   });
-  // "Today": jumps to today's date, staying in the current view mode (month view scrolls
-  // to today's row; day view switches straight to today; year view moves to the month view)
+  // "Today": from ANY view mode (year / month / day) jumps straight into today's day view,
+  // landing on the running hour (the red now-line). lastDaySig is reset so the auto-scroll
+  // also fires when today's day view was already open but scrolled somewhere else.
   document.getElementById("todayBtn").addEventListener("click", ()=>{
     const nowD = new Date();
     const y = nowD.getFullYear(), m = nowD.getMonth() + 1, d = nowD.getDate();
-    const wasDayMode = viewDay != null;
-    store.currentYear = y; dayMonth = m; viewDay = wasDayMode ? d : null;
+    store.currentYear = y; dayMonth = m; viewDay = d;
+    lastDaySig = null; todayGlide = true;
     saveStore(); render();
-    if(wasDayMode) return;
-    setTimeout(()=>{
-      const row = document.querySelector('.grid.day .row-line[data-row="' + d + '"]');
-      if(!row) return;
-      row.scrollIntoView({behavior:"smooth", block:"center"});
-      row.classList.add("today");
-      setTimeout(()=>row.classList.remove("today"), 1600);
-    }, 30);
   });
 
   // ---------- view mode slider: Year | Month | Day ----------
@@ -1939,12 +2500,12 @@ try{
     if(mode === "year"){
       dayMonth = null; viewDay = null;
     } else if(mode === "month"){
-      if(dayMonth == null) dayMonth = (store.currentYear === REAL_YEAR) ? REAL_MONTH : 1;
+      if(dayMonth == null) dayMonth = (window.__mobMonth && window.matchMedia("(max-width:560px)").matches) ? window.__mobMonth : ((store.currentYear === REAL_YEAR) ? REAL_MONTH : 1);
       viewDay = null;
     } else if(mode === "day"){
-      if(dayMonth == null) dayMonth = (store.currentYear === REAL_YEAR) ? REAL_MONTH : 1;
+      if(dayMonth == null) dayMonth = (window.__mobMonth && window.matchMedia("(max-width:560px)").matches) ? window.__mobMonth : ((store.currentYear === REAL_YEAR) ? REAL_MONTH : 1);
       const n = daysInMonth(store.currentYear, dayMonth);
-      if(viewDay == null) viewDay = (store.currentYear === REAL_YEAR && dayMonth === REAL_MONTH) ? Math.min(REAL_DAY, n) : 1;
+      if(viewDay == null) viewDay = (window.__mobDay && window.matchMedia("(max-width:560px)").matches) ? Math.min(window.__mobDay, n) : ((store.currentYear === REAL_YEAR && dayMonth === REAL_MONTH) ? Math.min(REAL_DAY, n) : 1);
       else viewDay = Math.min(viewDay, n);
     }
     saveStore(); window.scrollTo({top:0}); render();
@@ -2009,7 +2570,7 @@ try{
       if(skipAnim) viewModeThumb.style.transition = "none";
       const segRect = seg.getBoundingClientRect();
       const btnRect = activeBtn.getBoundingClientRect();
-      const relativeLeft = btnRect.left - segRect.left;
+      const relativeLeft = btnRect.left - segRect.left - seg.clientLeft;   // clientLeft = border: the thumb's left:0 starts inside it
       viewModeThumb.style.width = btnRect.width + "px";
       viewModeThumb.style.transform = "translateX(" + relativeLeft + "px)";
       if(skipAnim){
@@ -2019,12 +2580,18 @@ try{
     }
   }
 
+  try{
+    if(window.ResizeObserver){
+      new ResizeObserver(()=>{ if(viewModeBtns && viewModeBtns.length) updateViewModeSeg(true); }).observe(document.getElementById("viewModeSeg"));
+    }
+  }catch(e){}
+
   function getSegMetrics(){
     const seg = document.getElementById("viewModeSeg");
     const segRect = seg.getBoundingClientRect();
     const items = viewModeBtns.map(b=>{
       const r = b.getBoundingClientRect();
-      return { key: b.dataset.key, left: r.left - segRect.left, width: r.width };
+      return { key: b.dataset.key, left: r.left - segRect.left - seg.clientLeft, width: r.width };
     });
     return { seg, segRect, items };
   }
@@ -2274,6 +2841,7 @@ try{
       const sw = document.createElement("span");
       sw.className = "swatch";
       sw.style.background = "var(--"+p.color+")";
+      sw.style.setProperty("--mk", "var(--"+p.color+")");
       item.appendChild(sw);
 
       const nm = document.createElement("span");
@@ -2282,12 +2850,13 @@ try{
       const hasAmount = p.amount != null;
       nm.textContent = p.name;
 
-      const baseHex = COLOR_HEX[p.color] || "#33b679";
+      const baseHex = colorHex(p.color);
       let darkenStep = 1;
       if(hasNote){
         const noteBadge = document.createElement("span");
         noteBadge.className = "plan-badge";
         noteBadge.style.background = darkenHex(baseHex, 0.15 * darkenStep);
+        noteBadge.style.setProperty("--mk", noteBadge.style.background);
         item.appendChild(noteBadge);
         darkenStep++;
       }
@@ -2295,10 +2864,12 @@ try{
         const amountBadge = document.createElement("span");
         amountBadge.className = "plan-badge";
         amountBadge.style.background = darkenHex(baseHex, 0.15 * darkenStep);
+        amountBadge.style.setProperty("--mk", amountBadge.style.background);
         item.appendChild(amountBadge);
         darkenStep++;
       }
 
+      setItemMarkers(item, [sw.style.background].concat(item.querySelectorAll(".plan-badge").length ? Array.from(item.querySelectorAll(".plan-badge")).map(x=> x.style.background) : []));
       item.appendChild(nm);
       item.title = (hasNote || hasAmount) ? t("plan.hasInfo") : t("plan.noInfo");
       
@@ -2346,6 +2917,7 @@ try{
   function closePlanModal(){ planOverlay.classList.remove("open"); editingPlanId = null; }
 
   document.getElementById("pCancelBtn").addEventListener("click", closePlanModal);
+  document.getElementById("pModalX").addEventListener("click", closePlanModal);
   planOverlay.addEventListener("click", (e)=>{ if(e.target === planOverlay) closePlanModal(); });
 
   document.getElementById("pSaveBtn").addEventListener("click", ()=>{
@@ -2637,7 +3209,7 @@ try{
         "<span class='rtitle'><span class='dot " + String(r.color).replace(/[^\w-]/g, "") + "'></span>" + (r.done ? CHECK_ICON : "") + escapeHtml(r.title) + "</span>" +
         "<span class='rin'>" + (r.amount >= 0 ? formatMoney(r.amount) : "") + "</span>" +
         "<span class='rout'>" + (r.amount < 0 ? formatMoney(r.amount) : "") + "</span>" +
-        "<span class='rsaldo'>" + formatMoney(running) + "</span>";
+        "<span class='rsaldo' data-lbl='" + escapeHtml(t("rc.balance")) + "'>" + formatMoney(running) + "</span>";
       const noteKey = r.id + ":" + r.month;
       const note = document.createElement("textarea");
       note.className = "rnote"; note.rows = 1; note.maxLength = 500;
@@ -2657,6 +3229,19 @@ try{
       wrap.appendChild(row);
     });
     recapContentEl.appendChild(wrap);
+    // number columns are as wide as their widest value (any currency / decimals / amount), so nothing wraps or overlaps
+    (function sizeMoneyCols(){
+      const probe = document.createElement("span");
+      probe.style.cssText = "position:absolute;visibility:hidden;white-space:nowrap;font:700 12.5px 'Google Sans','Segoe UI',Roboto,Arial,sans-serif;font-variant-numeric:tabular-nums;";
+      wrap.appendChild(probe);
+      const w = (txt)=>{ probe.textContent = txt; return Math.ceil(probe.getBoundingClientRect().width); };
+      let mi = 0, mo = 0, mb = 0, run = 0;
+      rows.forEach(r=>{ run += r.amount; const wa = w(formatMoney(r.amount)); if(r.amount >= 0) mi = Math.max(mi, wa); else mo = Math.max(mo, wa); mb = Math.max(mb, w(formatMoney(run))); });
+      probe.remove();
+      wrap.style.setProperty("--rc-in", Math.max(56, mi + 4) + "px");
+      wrap.style.setProperty("--rc-out", Math.max(56, mo + 4) + "px");
+      wrap.style.setProperty("--rc-bal", Math.max(64, mb + 4) + "px");
+    })();
     wrap.scrollTop = prevScroll;
     wrap.querySelectorAll(".rnote").forEach(rnAutosize);
     setTimeout(()=>{ wrap.querySelectorAll(".rnote").forEach(rnAutosize); }, 280);   // drawer masih animasi buka: ukur ulang
@@ -3106,7 +3691,6 @@ try{
   function updateArchiveBtn(){
     try{
       const n = (store && store.archive) ? store.archive.length : 0;
-      const c = document.getElementById("archiveCount"); if(c) c.textContent = String(n);
       const tc = document.getElementById("archiveTopCount"); if(tc){ tc.textContent = n > 99 ? "99+" : String(n); tc.dataset.zero = n ? "0" : "1"; }
     }catch(e){}
   }
@@ -3232,7 +3816,6 @@ try{
   }
   function openArchive(){ renderArchive(); archOverlay.classList.add("open"); }
   function closeArchive(){ archOverlay.classList.remove("open"); }
-  document.getElementById("archiveBtn").addEventListener("click", openArchive);
   document.getElementById("archiveTopBtn").addEventListener("click", openArchive);
   document.addEventListener("keydown", (e)=>{ if(e.key === "Escape" && archOverlay.classList.contains("open")) closeArchive(); });
   document.getElementById("archCloseBtn").addEventListener("click", closeArchive);
@@ -3639,9 +4222,11 @@ try{
       items.push({ev, sd, ed, idx, timed});
     });
     items.sort((a,b)=> a.sd - b.sd || (b.ed - b.sd) - (a.ed - a.sd) || a.idx - b.idx);
+    // timed plans (set in the daily view) are not drawn as cards here; they are only counted in each day's "Timed Plan" chip
+    const cardItems = items.filter(it=> !it.timed);
     const MIN_SLOTS = 6;
-    const mPlace = placeSlots(items.map((it, i)=> ({ id: it.ev.id, s: it.sd, e: it.ed, pref: it.ev.mslot, order: i })), null, MIN_SLOTS);
-    items.forEach(it=>{ it.slot = mPlace.slots[it.ev.id]; });
+    const mPlace = placeSlots(cardItems.map((it, i)=> ({ id: it.ev.id, s: it.sd, e: it.ed, pref: it.ev.mslot, order: i })), null, MIN_SLOTS);
+    cardItems.forEach(it=>{ it.slot = mPlace.slots[it.ev.id]; });
     grid.style.setProperty("--slots", mPlace.K);
 
     // row 1 is reserved for the "All-month" recap strip, so every day row sits one line lower
@@ -3670,7 +4255,7 @@ try{
 
       // "Timed Plan" chip for this day — same look/behaviour as the year view's daily-plan
       // chip, but scoped to a single day and to plans that carry a specific time
-      const dayTimedCount = items.filter(it=> it.sd === d && it.ed === d && it.timed).length;
+      const dayTimedCount = items.filter(it=> it.sd === d && it.ed === d && it.timed && !it.ev.done).length;   // remaining only: checking a plan off lowers the count
       const timedChipCell = document.createElement("div");
       timedChipCell.className = "task-chip-cell";
       timedChipCell.style.gridRow = ROW0 + d; timedChipCell.style.gridColumn = 2;
@@ -3692,7 +4277,7 @@ try{
 
     // event cards
     const mon = MONTHS[m-1].slice(0, 3);
-    items.forEach(it=>{
+    cardItems.forEach(it=>{
       const ev = it.ev;
       const el = document.createElement("div");
       el.dataset.eventId = ev.id;
@@ -3711,7 +4296,7 @@ try{
       grid.appendChild(el);
     });
     // context for the live drag reflow
-    grid._live = { liveItems: items.map((it, i)=> ({ id: it.ev.id, ev: it.ev, s: it.sd, e: it.ed, pref: it.slot, order: i })), minSlots: MIN_SLOTS, slotVar: "--slots", base: mPlace, last: mPlace };
+    grid._live = { liveItems: cardItems.map((it, i)=> ({ id: it.ev.id, ev: it.ev, s: it.sd, e: it.ed, pref: it.slot, order: i })), minSlots: MIN_SLOTS, slotVar: "--slots", base: mPlace, last: mPlace };
   }
 
   // ---------- daily view: a single specific date, hourly agenda grid ----------
@@ -3796,6 +4381,8 @@ try{
       nowLineTop = (today.getHours() * 60 + today.getMinutes()) / 60 * HOUR_H;
       const nowLine = document.createElement("div");
       nowLine.className = "now-line";
+      nowLine.dataset.h = HOUR_H;
+      nowLine.dataset.day = y + "-" + m + "-" + d;
       nowLine.style.top = nowLineTop + "px";
       hours.appendChild(nowLine);
     }
@@ -3975,13 +4562,43 @@ try{
           const target = hours.getBoundingClientRect().top + window.scrollY + nowLineTop - lead;
           // glide down to the current hour (instant jump if the user prefers reduced motion)
           const calm = window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;
-          window.scrollTo({top: Math.max(0, target), behavior: calm ? "auto" : "smooth"});
+          const goal = Math.max(0, target);
+          if(todayGlide && !calm){
+            // two clear steps: (1) the pill slides to "Day" while the page waits at the top,
+            // (2) after a short pause the page glides down to the running hour
+            todayGlide = false;
+            window.scrollTo({top: 0, behavior: "auto"});
+            setTimeout(()=>{
+              if(lastDaySig !== daySig) return;   // user already moved elsewhere
+              const from = window.scrollY, dist = goal - from, dur = 640, t0 = performance.now();
+              if(Math.abs(dist) < 2) return;
+              (function step(now){
+                if(lastDaySig !== daySig) return;
+                const k = Math.min(1, (now - t0) / dur);
+                const e = k < .5 ? 4*k*k*k : 1 - Math.pow(-2*k + 2, 3) / 2;   // easeInOutCubic
+                window.scrollTo(0, from + dist * e);
+                if(k < 1) requestAnimationFrame(step);
+              })(t0);
+            }, 390);   // 280ms pill slide + ~110ms pause
+          } else {
+            todayGlide = false;
+            window.scrollTo({top: goal, behavior: calm ? "auto" : "smooth"});
+          }
         } else {
           window.scrollTo({top:0});
         }
       });
     }
   }
+
+  // running clock: move the now-line every minute; if the date rolled over, re-render the day view
+  setInterval(()=>{
+    const line = document.querySelector(".now-line");
+    if(!line) return;
+    const t = new Date();
+    if(line.dataset.day !== t.getFullYear() + "-" + (t.getMonth() + 1) + "-" + t.getDate()){ render(); return; }
+    line.style.top = ((t.getHours() * 60 + t.getMinutes()) / 60 * Number(line.dataset.h)) + "px";
+  }, 30000);
 
   // Mirrors .day-events-scroll's horizontal scroll in a slim bar that lives inside .day-hours
   // itself (so it's confined to the calendar column, never the sidebar) and is CSS-sticky to the
@@ -4002,7 +4619,7 @@ try{
     hoursEl.style.flexDirection = "column";
     hoursEl.style.justifyContent = "flex-end";
     bar.style.flex = "none";
-    bar.style.marginBottom = "-18px"; // hangs 18px below the grid at rest; floats 6px above the screen edge
+    bar.style.marginBottom = "-12px"; // hangs just below the grid at rest; floats 6px above the screen edge
     hoursEl.appendChild(bar);
 
     window.__hintDayScroll = eventsScroll;
@@ -4513,31 +5130,17 @@ try{
       const chip = document.createElement("div");
       chip.className = "task-chip";
       const dayCards = yAll.events.filter(e=> e.scope === "day" && e.startMonth <= r && e.endMonth >= r);
-      const dayDone = dayCards.filter(e=> e.done).length;
-      chip.innerHTML = "<span>" + t(dayCards.length === 1 ? "task.one" : "task.many", {n: (dayDone ? dayDone + "/" : "") + dayCards.length}) + "</span>";
+      const dayLeft = dayCards.filter(e=> !e.done).length;   // remaining only (no "done/total"): checking a plan off just lowers the number
+      chip.innerHTML = "<span>" + t(dayLeft === 1 ? "task.one" : "task.many", {n: dayLeft}) + "</span>";
       chip.title = t("task.edit");
       chip.addEventListener("click", ()=> openDay(r));
       chipCell.appendChild(chip);
       grid.appendChild(chipCell);
 
-      // precompute occurrence index per (color) within this month, so repeated
-      // same-color cards get an alternating shade to stay distinguishable
-      const colorSeen = {};
-      const shadeIndexById = {};
-      yd.events.filter(e=> e.startMonth===r && e.endMonth===e.startMonth).forEach(ev=>{
-        colorSeen[ev.color] = (colorSeen[ev.color] || 0) + 1;
-        shadeIndexById[ev.id] = colorSeen[ev.color] - 1;
-      });
-
       function buildEventCardEl(ev){
         const el = document.createElement("div");
         el.dataset.eventId = ev.id;
         el.className = "event " + ev.color + priCls(ev) + " span" + (ev.amount != null ? " has-amount" : "") + (ev.done ? " done" : "");
-        const shadeIdx = shadeIndexById[ev.id] || 0;
-        const isSpanningCard = ev.endMonth > ev.startMonth;
-        if(!isSpanningCard){
-          /* no shade variation: Day/Month show same-colour cards identically */
-        }
         el.innerHTML = "<span class='ev-title'>"+escapeHtml(ev.title)+"</span>"
           + (ev.note ? "<span class='note-preview'>"+escapeHtml(ev.note)+"</span>" : "")
           + (ev.amount != null ? "<span class='amount-preview'>"+(ev.recurring ? "@" : "")+formatMoney(ev.amount)+(ev.recurring ? t("ev.perMonthShort") : "")+"</span>" : "");
@@ -4626,11 +5229,13 @@ try{
     const th = resolvedTheme();
     root.setAttribute("data-theme", th);
     root.setAttribute("data-density", S.density);
-    const a = ACCENTS[S.accent], m = MONEY_ACCENTS[S.moneyAccent];
+    const a = ACCENTS[S.accent];
     root.style.setProperty("--blue", a.fill);
     root.style.setProperty("--accent-fg", th === "dark" ? a.dark : a.fill);
-    root.style.setProperty("--money", m.fill);
-    root.style.setProperty("--money-fg", th === "dark" ? m.dark : m.fill);
+    // money colour: cool accent -> green, warm accent -> red
+    const warm = !!a.warm;
+    root.style.setProperty("--money", warm ? "#d50000" : "#0b8043");
+    root.style.setProperty("--money-fg", warm ? (th === "dark" ? "#f28b82" : "#d50000") : (th === "dark" ? "#81c995" : "#0b8043"));
   }
   if(darkQuery){
     const onScheme = ()=>{ if(S.theme === "system"){ applyAppearance(); refreshSettingsUI(); } };
@@ -4769,7 +5374,6 @@ try{
   });
   makeSeg("sDensity", ["comfortable","compact"], k=> t("density." + k), ()=>S.density, k=>{ S.density = k; commit(); applyAppearance(); refreshSettingsUI(); });
   makeSwatches("sAccent", ACCENTS, ()=>S.accent, k=>{ S.accent = k; commit(); applyAppearance(); refreshSettingsUI(); });
-  makeSwatches("sMoney", MONEY_ACCENTS, ()=>S.moneyAccent, k=>{ S.moneyAccent = k; commit(); applyAppearance(); refreshSettingsUI(); });
 
   function openSettings(){ refreshSettingsUI(); settingsOverlay.classList.add("open"); }
   function closeSettings(){ settingsOverlay.classList.remove("open"); if(typeof disarmSample === "function") disarmSample(); }
@@ -4841,7 +5445,7 @@ try{
       google.accounts.oauth2.revoke(driveAccessToken, ()=>{});
     }
     driveAccessToken = null; driveFileId = null;
-    try{ localStorage.removeItem(DRIVE_CONNECTED_KEY); }catch(e){}
+    try{ localStorage.removeItem(DRIVE_CONNECTED_KEY); localStorage.removeItem(DRIVE_SYNCED_KEY); }catch(e){}   // next login (maybe another account) = first link -> asks before overwriting
     clearStoredDriveToken();
     clearProfile();
     setDriveState("idle");
@@ -4860,6 +5464,73 @@ try{
   if(dlSkipBtn) dlSkipBtn.addEventListener("click", ()=>{
     try{ sessionStorage.setItem(DRIVE_LANDING_SKIP_KEY, "1"); }catch(e){}
     hideDriveLanding();
+  });
+
+
+  // ---------- keyboard ----------
+  //  Calendar (no dialog open, not typing):  <- / ->  previous / next view mode (Year, Month, Day)
+  //                                          Tab (nothing focused) jumps to "Add a new plan"; Enter there adds it
+  //  Add / Edit dialogs: Tab walks top to bottom, then Note -> Save -> Cancel -> Delete; Tab never leaves the dialog.
+  //                      Enter saves (from any field except Note, where Enter is a new line - Tab to Save, then Enter);
+  //                      Esc closes. Colour and priority are ONE tab stop each; arrow keys pick inside them.
+  function rovingGroup(container, sel){
+    container.addEventListener("keydown", (e)=>{
+      const k = e.key;
+      if(k !== "ArrowLeft" && k !== "ArrowRight" && k !== "ArrowUp" && k !== "ArrowDown") return;
+      const btns = Array.from(container.querySelectorAll(sel));
+      const i = btns.indexOf(document.activeElement); if(i < 0) return;
+      e.preventDefault(); e.stopPropagation();
+      const next = btns[(i + ((k === "ArrowLeft" || k === "ArrowUp") ? -1 : 1) + btns.length) % btns.length];
+      next.click(); next.focus();
+    });
+  }
+  rovingGroup(document.getElementById("swatches"), ".swatch-btn");
+  rovingGroup(document.getElementById("pSwatches"), ".swatch-btn");
+  rovingGroup(document.getElementById("fPriority"), "button");
+
+  function focusables(root){
+    return Array.from(root.querySelectorAll('a[href],button,input,select,textarea,[tabindex]'))
+      .filter(el=> !el.disabled && el.tabIndex >= 0 && el.type !== "hidden" && el.getClientRects().length > 0);
+  }
+  const SAVE_FOR = { overlay:"saveBtn", planOverlay:"pSaveBtn" };
+  document.addEventListener("keydown", (e)=>{
+    if(e.defaultPrevented || e.isComposing) return;
+    const ov = document.querySelector(".overlay.open");
+    const ae = document.activeElement, tag = ae ? ae.tagName : "";
+    const typing = tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || (ae && ae.isContentEditable);
+
+    if(ov){
+      const modal = ov.querySelector(".modal");
+      if(e.key === "Tab" && modal){                       // keep Tab inside the dialog
+        const list = focusables(modal); if(!list.length) return;
+        const i = list.indexOf(ae);
+        if(i < 0){ e.preventDefault(); list[e.shiftKey ? list.length - 1 : 0].focus(); }
+        else if(e.shiftKey && i === 0){ e.preventDefault(); list[list.length - 1].focus(); }
+        else if(!e.shiftKey && i === list.length - 1){ e.preventDefault(); list[0].focus(); }
+        return;
+      }
+      const saveId = SAVE_FOR[ov.id];
+      if(!saveId) return;                                  // Settings / Archive / login keep their own keys
+      if(e.key === "Escape"){ e.preventDefault(); (ov.id === "overlay" ? closeModal : closePlanModal)(); return; }
+      if(e.key === "Enter" && !e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey){
+        if(tag === "TEXTAREA") return;                     // Note: Enter = new line
+        if(tag === "BUTTON" && (ae.classList.contains("btn") || ae.classList.contains("link-danger"))) return;   // Save / Cancel / Delete do their own thing
+        e.preventDefault();
+        document.getElementById(saveId).click();
+      }
+      return;
+    }
+
+    if(e.ctrlKey || e.metaKey || e.altKey) return;
+    if(e.key === "Tab" && !e.shiftKey && (ae === document.body || !ae)){   // nothing focused: first Tab = the new-plan field
+      e.preventDefault(); planInput.focus(); return;
+    }
+    if((e.key === "ArrowLeft" || e.key === "ArrowRight") && !typing){
+      const order = ["year", "month", "day"];
+      const i = order.indexOf(getViewMode()), j = i + (e.key === "ArrowRight" ? 1 : -1);
+      if(j < 0 || j >= order.length) return;
+      e.preventDefault(); setViewMode(order[j]);
+    }
   });
 
   waitForGIS(initDrive);
@@ -4882,6 +5553,736 @@ try{
   applyAppearance();
   applyStaticI18n();
   refreshSettingsUI();
+
+  // ---------- PHONE MODE JS - see MOBILE MODE DOC at the top of this file ----------
+  // ---------- mobile: calendar reference strip (tabs) + vertical card feed + month picker ----------
+  const calStrip = document.getElementById("calStrip");
+  const monthPop = document.getElementById("monthPop");
+  const mobFeed = document.getElementById("mobFeed");
+  const mqMobile = window.matchMedia("(max-width:560px)");
+  let mobMonth = null, mobDay = null, mobHour = null, mobHourSig = "", popYear = null, spyLock = 0;
+  const collapsedG = {};   // Day feed: which status groups (on / still / up) are folded
+  function dtf(o){ return new Intl.DateTimeFormat(calLang() === "id" ? "id-ID" : "en-US", o); }
+  function syncPref(){ window.__mobMonth = mobMonth; window.__mobDay = mobDay; }
+  window.__mobAddPrefill = function(){
+    if(!mqMobile.matches) return null;
+    const mode = getViewMode();
+    if(mode === "year") return { startMonth:mobMonth, endMonth:mobMonth };
+    if(mode === "month") return { startMonth:dayMonth, endMonth:dayMonth, startDay:mobDay, endDay:mobDay };
+    return null;
+  };
+  const MTXT = {
+    id:{ tagOn:"Berlangsung", tagStill:"Masih berlangsung", tagUp:"Akan datang", around:"Sekitar jam ini", upcoming:"Akan datang \u00B7 1 jam ke depan", nothing:"Tidak ada rencana", allDay:"Sepanjang hari", none:"Belum ada rencana.", daily:"{n} rencana harian \u203A", allMonth:"Sepanjang bulan", tagToday:"Hari ini", tagThisDay:"Hari itu", tagTomorrow:"Besok", tagNextDay:"Hari berikutnya", timedLink:"{n} rencana berjam \u203A", allYear:"Sepanjang tahun", tagThisMonth:"Bulan ini", tagThatMonth:"Bulan itu", tagNextMonth:"Bulan depan" },
+    en:{ tagOn:"On going", tagStill:"Still going", tagUp:"Upcoming", around:"Around this hour", upcoming:"Upcoming \u00B7 next hour", nothing:"Nothing planned", allDay:"All day", none:"No plans yet.", daily:"{n} daily plans \u203A", allMonth:"All month", tagToday:"Today", tagThisDay:"That day", tagTomorrow:"Tomorrow", tagNextDay:"Next day", timedLink:"{n} timed plans \u203A", allYear:"All year", tagThisMonth:"This month", tagThatMonth:"That month", tagNextMonth:"Next month" }
+  };
+  function mt(k, n){ return (MTXT[calLang()] || MTXT.en)[k].replace("{n}", n); }
+
+  // data helpers (same rules the calendar grids use)
+  function evsForDay(y, m, d){
+    const n = daysInMonth(y, m), out = [];
+    getYearData(y).events.forEach((ev, idx)=>{
+      if(ev.scope !== "day") return;
+      if(S.hideDone && ev.done) return;
+      if(ev.startMonth > m || ev.endMonth < m) return;
+      const sd = (ev.startMonth === m && ev.startDay) ? Math.min(ev.startDay, n) : 1;
+      let ed = (ev.endMonth === m && ev.endDay) ? Math.min(ev.endDay, n) : n;
+      if(ed < sd) ed = sd;
+      if(d < sd || d > ed) return;
+      out.push({ ev, idx, sd, ed, timed: !!(sd === ed && ev.startTime) });
+    });
+    out.sort((a, b)=> (a.timed ? 1 : 0) - (b.timed ? 1 : 0) || (a.timed ? timeToMin(a.ev.startTime) - timeToMin(b.ev.startTime) : a.idx - b.idx));
+    return out;
+  }
+  function yearCardsFor(y, m){
+    return getYearData(y).events.filter(e=> e.scope !== "day" && !(S.hideDone && e.done) && e.startMonth <= m && e.endMonth >= m);
+  }
+  function dayPlanCount(y, m){
+    const n = daysInMonth(y, m);
+    return getYearData(y).events.filter(ev=> ev.scope === "day" && !(S.hideDone && ev.done) && ev.startMonth <= m && ev.endMonth >= m).length;
+  }
+
+  function renderCalStrip(keepScroll){
+    if(!calStrip) return;
+    const mode = getViewMode(), y = store.currentYear, now2 = new Date();
+    const oldAct = calStrip.querySelector(".cs-item.on");
+    const oldId = oldAct ? oldAct.dataset.id : null, oldPos = oldAct ? oldAct.offsetLeft - calStrip.scrollLeft : 0;
+    let h = "", actId = null;
+    calStrip.classList.remove("week");
+    // neighbours (previous / next year, month or day) are drawn faded on both sides so the strip reads as one continuous line
+    const GH = 10;
+    const chip = (id, k, off, top, num, on, td, has, mon)=>{ if(on) actId = id; return '<button type="button" class="cs-item' + (mon ? " mon" : "") + (off ? " ghost" : "") + (on ? " on" : "") + (td ? " today" : "") + (has ? " has" : "") +
+      '" data-id="' + id + '" data-k="' + k + '" data-off="' + off + '">' + (top != null ? '<span class="cs-top">' + top + '</span>' : "") + '<span class="cs-num">' + num + '</span></button>'; };
+    if(mode === "year"){
+      const f = dtf({ month:"short" });
+      for(let off = -1; off <= 1; off++){
+        const yy = y + off;
+        for(let m = 1; m <= 12; m++){
+          const td = (yy === now2.getFullYear() && m === now2.getMonth() + 1);
+          const has = yearCardsFor(yy, m).length || dayPlanCount(yy, m);
+          h += chip(yy * 100 + m, m, off, null, f.format(new Date(yy, m - 1, 1)), !off && m === mobMonth, td, has, true);
+        }
+      }
+    } else if(mode === "month"){
+      const f = dtf({ weekday:"short" });
+      for(let off = -1; off <= 1; off++){
+        const dt = new Date(y, dayMonth - 1 + off, 1), yy = dt.getFullYear(), mm = dt.getMonth() + 1, n = daysInMonth(yy, mm);
+        const from = off < 0 ? Math.max(1, n - GH + 1) : 1, to = off > 0 ? Math.min(n, GH) : n;
+        for(let d = from; d <= to; d++){
+          const td = (yy === now2.getFullYear() && mm === now2.getMonth() + 1 && d === now2.getDate());
+          h += chip(yy * 10000 + mm * 100 + d, d, off, f.format(new Date(yy, mm - 1, d)), d, !off && d === mobDay, td, evsForDay(yy, mm, d).length, false);
+        }
+      }
+    } else {
+      const nowH = now2.getHours();
+      for(let off = -1; off <= 1; off++){
+        const dt = new Date(y, dayMonth - 1, viewDay + off), yy = dt.getFullYear(), mm = dt.getMonth() + 1, dd = dt.getDate();
+        const hasH = {};
+        evsForDay(yy, mm, dd).forEach(it=>{ if(it.timed) hasH[parseInt(it.ev.startTime, 10)] = 1; });
+        const isToday = now2.toDateString() === dt.toDateString();
+        const from = off < 0 ? 24 - GH : 0, to = off > 0 ? GH - 1 : 23;
+        for(let hh = from; hh <= to; hh++)
+          h += chip((yy * 10000 + mm * 100 + dd) * 100 + hh, hh, off, null, String(hh).padStart(2, "0") + ":00", !off && hh === mobHour, isToday && hh === nowH, hasH[hh], true);
+      }
+    }
+    const norm = mode + "|" + h.replace(/ on(?=[ "])/g, "");
+    let animate;
+    if(calStrip._norm === norm){
+      // same chips, only the selection moved: keep the nodes so the highlight can fade and the strip just glides
+      calStrip.querySelectorAll(".cs-item").forEach(el=> el.classList.toggle("on", el.dataset.id === String(actId)));
+      animate = true;
+    } else {
+      calStrip._norm = norm;
+      calStrip.innerHTML = h;
+    }
+    if(calStrip.clientWidth){
+      let minW = 1e9; calStrip.querySelectorAll(".cs-item").forEach(el=>{ minW = Math.min(minW, el.offsetWidth); });
+      calStrip.style.setProperty("--cs-pad", Math.max(0, (calStrip.clientWidth - minW) / 2) + "px");
+    }
+    const act = calStrip.querySelector(".cs-item.on");
+    if(!act){ calStrip.scrollLeft = 0; return; }
+    const target = act.offsetLeft - calStrip.clientWidth / 2 + act.offsetWidth / 2;
+    if(!animate){
+      // chips were rebuilt (new year / month / day): put the chip that was selected back where it was on screen, then glide
+      const same = oldId != null ? calStrip.querySelector('.cs-item[data-id="' + oldId + '"]') : null;
+      if(same){ calStrip.scrollLeft = same.offsetLeft - oldPos; animate = true; }
+    }
+    if(animate) calStrip.scrollTo({ left:target, behavior:"smooth" });
+    else calStrip.scrollLeft = target;
+  }
+
+  function buildMobCard(ev, meta, yearly, dragOn){
+    const el = document.createElement("div");
+    el.dataset.eventId = ev.id;
+    el.className = "event mcard " + ev.color + priCls(ev) + (!meta && !ev.note && ev.amount == null ? " one" : "") + " span" + (ev.amount != null ? " has-amount" : "") + (ev.done ? " done" : "");
+    el.innerHTML = "<span class='ev-title'>" + escapeHtml(ev.title) + "</span>"
+      + (meta ? "<span class='time-preview'>" + escapeHtml(meta) + "</span>" : "")
+      + (ev.note ? "<span class='note-preview'>" + escapeHtml(ev.note) + "</span>" : "")
+      + (ev.amount != null ? "<span class='amount-preview'>" + (ev.recurring ? "@" : "") + formatMoney(ev.amount) + (ev.recurring ? t("ev.perMonthShort") : "") + "</span>" : "");
+    el.addEventListener("click", e=>{
+      if(e.target.closest(".done-btn")) return;
+      if(Date.now() - feedDragEnd < 450) return;   // the finger-lift that ends a drag is not a tap
+      openModal(ev.scope ? ev : Object.assign({}, ev, { scope: yearly ? "year" : "day" }));
+    });
+    el.appendChild(buildDoneBtn(ev));
+    if(dragOn === "row") attachRowDrag(el, ev); else if(dragOn === "grp") attachFeedDrag(el, ev, "date"); else if(dragOn) attachFeedDrag(el, ev);
+    return el;
+  }
+  // ---------- phone Day feed: hold a card, then drag it. Same hour group = re-order by time; other hour group = move to that hour.
+  // The other cards slide up / down while you drag, so the gap shows where the card will land. ----------
+  let feedDragEnd = 0;
+  function tagH(h, m, d){ h.dataset.tm = m; h.dataset.td = d || ""; return h; }   // header = drop target for a month (Year view) or a date (Month view)
+  function attachFeedDrag(el, ev, kind){
+    let active = false;
+    // once the hold has fired, stop the page from scrolling under the finger (the listener must be non-passive)
+    el.addEventListener("touchmove", e=>{ if(active && e.cancelable) e.preventDefault(); }, { passive:false });
+    el.addEventListener("contextmenu", e=>{ e.preventDefault(); });
+    el.addEventListener("pointerdown", function(d0){
+      if(d0.button !== 0 || d0.isPrimary === false || d0.target.closest(".done-btn")) return;
+      const sx = d0.clientX, sy = d0.clientY;
+      let hold = null, ghost = null, scrollT = null, tgt = null, moved = false, lx = sx, ly = sy, ox = 0, oy = 0, step = 0;
+      // natural position (layout only, ignores the slide transforms, which may still be animating)
+      const nat = k=>{ const top = mobFeed.getBoundingClientRect().top + (k.offsetParent === mobFeed ? k.offsetTop : k.offsetTop - mobFeed.offsetTop); return { top:top, bottom:top + k.offsetHeight }; };
+      function layout(){
+        const out = []; let cur = null;
+        Array.from(mobFeed.children).forEach(k=>{
+          if(k.classList.contains("mf-hour")){ cur = { hdr:k, cards:[] }; out.push(cur); }
+          else if(cur && k.classList.contains("mcard") && k !== el) cur.cards.push(k);
+        });
+        out.forEach((g, i)=>{ g.top = nat(g.hdr).top; g.bottom = i + 1 < out.length ? nat(out[i + 1].hdr).top : Infinity; });
+        return out;
+      }
+      function shiftAll(pos, e){
+        // pos = index (in the list without el) the gap opens in front of; e = where el used to sit in that same list
+        const ks = Array.from(mobFeed.children).filter(k=> k !== el);
+        ks.forEach((k, j)=>{
+          const ty = (pos != null && j >= pos ? step : 0) - (pos != null && j >= e ? step : 0);
+          k._ty = ty; k.style.transition = "transform .2s ease"; k.style.transform = "translateY(" + ty + "px)";
+        });
+      }
+      function pick(y){
+        const gs = layout();
+        let g = gs.find(g=> y >= g.top && y < g.bottom);
+        if(g && (kind === "date" ? !g.hdr.dataset.tm : Number(g.hdr.dataset.h) < 0)) g = null;
+        const prevHdr = tgt && tgt.g.hdr;
+        if(!g){ if(prevHdr) prevHdr.classList.remove("m-drop"); tgt = null; shiftAll(null, 0); return; }
+        const k = g.cards.filter(c=>{ const n = nat(c); return (n.top + n.bottom) / 2 < y; }).length;
+        if(prevHdr !== g.hdr){ if(prevHdr) prevHdr.classList.remove("m-drop"); g.hdr.classList.add("m-drop"); }
+        tgt = { g, k };
+        const ks = Array.from(mobFeed.children), e = ks.indexOf(el), ks2 = ks.filter(x=> x !== el);
+        let before = g.cards[k];
+        if(!before){ const last = g.cards.length ? g.cards[g.cards.length - 1] : g.hdr; before = ks2[ks2.indexOf(last) + 1]; }
+        shiftAll(before ? ks2.indexOf(before) : ks2.length, e);
+      }
+      function place(x, y){ ghost.style.transform = "translate(" + (x - ox) + "px," + (y - oy) + "px) scale(1.03)"; }
+      function start(){
+        active = true;
+        const r = el.getBoundingClientRect();
+        ox = sx - r.left; oy = sy - r.top;
+        step = el.offsetHeight + (parseFloat(getComputedStyle(mobFeed).rowGap) || 0);
+        ghost = el.cloneNode(true); ghost.classList.add("m-ghost");
+        ghost.style.cssText = "left:0;top:0;width:" + r.width + "px;height:" + r.height + "px;";
+        ghost.style.transform = "translate(" + r.left + "px," + r.top + "px) scale(1.03)";
+        document.body.appendChild(ghost);
+        el.classList.add("m-lift");
+        if(navigator.vibrate) try{ navigator.vibrate(12); }catch(err){}
+        scrollT = setInterval(()=>{
+          if(ly < 110) window.scrollBy(0, -10); else if(ly > window.innerHeight - 110) window.scrollBy(0, 10); else return;
+          pick(ly);
+        }, 16);
+      }
+      function end(){
+        clearTimeout(hold); clearInterval(scrollT); active = false;
+        document.removeEventListener("pointermove", onMove); document.removeEventListener("pointerup", onUp); document.removeEventListener("pointercancel", onCancel);
+        if(ghost){ ghost.remove(); ghost = null; }
+        el.classList.remove("m-lift");
+        Array.from(mobFeed.children).forEach(k=>{ k._ty = 0; k.style.transform = ""; k.style.transition = ""; k.classList.remove("m-drop"); });
+      }
+      function onMove(e){
+        lx = e.clientX; ly = e.clientY;
+        if(!active){ if(Math.abs(lx - sx) > 8 || Math.abs(ly - sy) > 8){ end(); } return; }   // moved before the hold fired = a normal scroll
+        moved = true; place(lx, ly); pick(ly);
+      }
+      function onUp(){
+        const t = tgt, did = active && moved;
+        end();
+        if(!did) return;
+        feedDragEnd = Date.now();
+        if(!t) return;                                  // not on a valid group: nothing changes
+        if(kind === "date"){
+          const arr = getYearData(store.currentYear).events, y0 = store.currentYear, evOf = c=> arr.find(x=> x.id === c.dataset.eventId);
+          const ne = t.g.cards[t.k] && evOf(t.g.cards[t.k]), pe = t.g.cards[t.k - 1] && evOf(t.g.cards[t.k - 1]);
+          const tm = Number(t.g.hdr.dataset.tm), td = Number(t.g.hdr.dataset.td) || 0;
+          if(ev.scope === "day"){            // Month view: move to that date, keep the length in days
+            const sd = new Date(y0, ev.startMonth - 1, ev.startDay || 1), ed = new Date(y0, ev.endMonth - 1, ev.endDay || daysInMonth(y0, ev.endMonth));
+            const len = Math.max(0, Math.round((ed - sd) / 864e5)), a = new Date(y0, tm - 1, td), b2 = new Date(y0, tm - 1, td + len);
+            const z = b2.getFullYear() > y0 ? new Date(y0, 11, 31) : b2;
+            ev.startMonth = a.getMonth() + 1; ev.startDay = a.getDate(); ev.endMonth = z.getMonth() + 1; ev.endDay = z.getDate();
+          } else {                           // Year view: move to that month, keep the length in months
+            const len = ev.endMonth - ev.startMonth; ev.startMonth = tm; ev.endMonth = Math.min(12, tm + len);
+          }
+          const from = arr.indexOf(ev);
+          if(from >= 0 && (ne || pe)){ arr.splice(from, 1); const at = ne ? arr.indexOf(ne) : arr.indexOf(pe) + 1; arr.splice(at < 0 ? arr.length : at, 0, ev); }
+          saveStore(); render(); return;
+        }
+        const h = Number(t.g.hdr.dataset.h), st = timeToMin(ev.startTime);
+        if(st == null) return;
+        const en = ev.endTime ? timeToMin(ev.endTime) : st + 60, dur = Math.max(15, en - st);
+        const prev = t.g.cards[t.k - 1], next = t.g.cards[t.k];
+        const evOf = c=> (getYearData(store.currentYear).events.find(x=> x.id === c.dataset.eventId));
+        const pe = prev && evOf(prev), ne = next && evOf(next);
+        const ps = pe ? timeToMin(pe.startTime) : null, nS = ne ? timeToMin(ne.startTime) : null;
+        let ns;
+        if(ps != null && nS != null) ns = Math.floor((ps + nS) / 2);          // between its new neighbours
+        else if(nS != null) ns = Math.max(h * 60, nS - 5);                     // top of the group
+        else if(ps != null) ns = Math.min(h * 60 + 59, ps + 5);                // bottom of the group
+        else ns = h * 60 + (st % 60);                                          // alone in that hour: keep its minutes
+        ns = Math.max(h * 60, Math.min(h * 60 + 59, ns));
+        if(ns === st && Math.floor(st / 60) === h && !(pe && ps === ns) && !(ne && nS === ns)){ render(); return; }
+        ev.startTime = minToTime(ns); ev.endTime = minToTime(Math.min(ns + dur, 24 * 60 - 1));
+        // equal start times keep the array order, so put the card on the correct side of its neighbour
+        const arr = getYearData(store.currentYear).events, from = arr.indexOf(ev);
+        if(from >= 0 && ((pe && ps === ns) || (ne && nS === ns))){
+          arr.splice(from, 1);
+          const at = ne ? arr.indexOf(ne) : arr.indexOf(pe) + 1;
+          arr.splice(at < 0 ? arr.length : at, 0, ev);
+        }
+        saveStore(); render();
+      }
+      function onCancel(){ end(); }
+      document.addEventListener("pointermove", onMove); document.addEventListener("pointerup", onUp); document.addEventListener("pointercancel", onCancel);
+      hold = setTimeout(start, 350);
+    });
+  }
+  // ---------- phone "All day / All month / All year" square row: hold a card, then drag it left / right to re-order it.
+  // The other squares slide sideways while you drag. Order = position in the saved events list. ----------
+  function attachRowDrag(el, ev){
+    let active = false;
+    el.addEventListener("touchmove", e=>{ if(active && e.cancelable) e.preventDefault(); }, { passive:false });
+    el.addEventListener("contextmenu", e=>{ e.preventDefault(); });
+    el.addEventListener("pointerdown", function(d0){
+      if(d0.button !== 0 || d0.isPrimary === false || d0.target.closest(".done-btn")) return;
+      const row = el.parentNode, sx = d0.clientX, sy = d0.clientY;
+      if(!row) return;
+      let hold = null, ghost = null, scrollT = null, k = null, moved = false, lx = sx, ly = sy, ox = 0, oy = 0, step = 0;
+      const cards = ()=> Array.from(row.children).filter(c=> c !== el && c.classList.contains("mcard"));
+      // natural position (layout only; the slide transforms may still be animating)
+      const natX = c=> row.getBoundingClientRect().left - row.scrollLeft + (c.offsetParent === row ? c.offsetLeft : c.offsetLeft - row.offsetLeft);
+      function pick(x){
+        const cs = cards(), all = Array.from(row.children), e = all.indexOf(el);
+        k = cs.filter(c=> natX(c) + c.offsetWidth / 2 < x).length;
+        // gap opens in front of cs[k]; cs[j] was behind el when j >= e
+        cs.forEach((c, j)=>{
+          const tx = (j >= k ? step : 0) - (j >= e ? step : 0);
+          c._tx = tx; c.style.transition = "transform .2s ease"; c.style.transform = "translateX(" + tx + "px)";
+        });
+      }
+      function place(x, y){ ghost.style.transform = "translate(" + (x - ox) + "px," + (y - oy) + "px) scale(1.05)"; }
+      function start(){
+        active = true;
+        const r = el.getBoundingClientRect();
+        ox = sx - r.left; oy = sy - r.top;
+        step = el.offsetWidth + (parseFloat(getComputedStyle(row).columnGap) || 0);
+        row.style.scrollSnapType = "none";
+        ghost = el.cloneNode(true); ghost.classList.add("m-ghost");
+        ghost.style.cssText = "left:0;top:0;width:" + r.width + "px;height:" + r.height + "px;";
+        ghost.style.transform = "translate(" + r.left + "px," + r.top + "px) scale(1.05)";
+        document.body.appendChild(ghost);
+        el.classList.add("m-lift");
+        if(navigator.vibrate) try{ navigator.vibrate(12); }catch(err){}
+        scrollT = setInterval(()=>{
+          const rr = row.getBoundingClientRect();
+          if(lx < rr.left + 44) row.scrollLeft -= 8; else if(lx > rr.right - 44) row.scrollLeft += 8; else return;
+          pick(lx);
+        }, 16);
+      }
+      function end(){
+        clearTimeout(hold); clearInterval(scrollT); active = false;
+        document.removeEventListener("pointermove", onMove); document.removeEventListener("pointerup", onUp); document.removeEventListener("pointercancel", onCancel);
+        if(ghost){ ghost.remove(); ghost = null; }
+        el.classList.remove("m-lift"); row.style.scrollSnapType = "";
+        Array.from(row.children).forEach(c=>{ c._tx = 0; c.style.transform = ""; c.style.transition = ""; });
+      }
+      function onMove(e){
+        lx = e.clientX; ly = e.clientY;
+        if(!active){ if(Math.abs(lx - sx) > 8 || Math.abs(ly - sy) > 8){ end(); } return; }   // moved before the hold fired = a normal scroll
+        moved = true; place(lx, ly); pick(lx);
+      }
+      function onUp(){
+        const cs = cards(), kk = k, did = active && moved;
+        end();
+        if(!did) return;
+        feedDragEnd = Date.now();
+        if(kk == null) return;
+        const arr = getYearData(store.currentYear).events, evOf = c=> arr.find(x=> x.id === c.dataset.eventId);
+        const next = cs[kk] && evOf(cs[kk]), prev = cs[kk - 1] && evOf(cs[kk - 1]);
+        const from = arr.indexOf(ev);
+        if(from < 0 || (!next && !prev)) return;
+        // already sitting between those two neighbours: nothing to change
+        const all = Array.from(row.children).filter(c=> c.classList.contains("mcard")), me = all.indexOf(el), before = all[me - 1] && evOf(all[me - 1]), after = all[me + 1] && evOf(all[me + 1]);
+        if(prev === before && next === after){ render(); return; }
+        arr.splice(from, 1);
+        const at = next ? arr.indexOf(next) : arr.indexOf(prev) + 1;
+        arr.splice(at < 0 ? arr.length : at, 0, ev);
+        saveStore(); render();
+      }
+      function onCancel(){ end(); }
+      document.addEventListener("pointermove", onMove); document.addEventListener("pointerup", onUp); document.addEventListener("pointercancel", onCancel);
+      hold = setTimeout(start, 350);
+    });
+  }
+  function feedSection(label){
+    const h = document.createElement("div"); h.className = "mf-sec"; h.textContent = label; return h;
+  }
+  function feedHour(label, hr, tag, kind, n){
+    const h = document.createElement("div"); h.className = "mf-hour"; h.dataset.h = hr;
+    const closed = !!(kind && collapsedG[kind]);
+    h.innerHTML = "<span class='mf-h'>" + escapeHtml(label) + "</span><span class='mf-line'></span>"
+      + (tag ? "<span class='mf-tag " + kind + "'>" + escapeHtml(tag) + "</span>" : "")
+      + (kind ? "<span class='mf-chev'>" + (closed && n ? "<i>" + n + "</i>" : "") + "\u203A</span>" : "");
+    if(kind){
+      h.classList.add("fold"); if(closed) h.classList.add("closed");
+      h.addEventListener("click", ()=>{ collapsedG[kind] = !collapsedG[kind]; renderFeed(); });
+    }
+    return h;
+  }
+  // horizontal row of square cards (Day view "All day", Month view "All month"); the chevron says "slide for more"
+  function buildAllRow(cards){
+    const wrap = document.createElement("div"); wrap.className = "mf-allwrap";
+    const row = document.createElement("div"); row.className = "mf-allday";
+    cards.forEach(c=>{ c.classList.add("sq"); row.appendChild(c); });
+    const more = document.createElement("button"); more.type = "button"; more.className = "mf-allmore"; more.setAttribute("aria-label", "More"); more.innerHTML = "\u203A";
+    const upd = ()=> wrap.classList.toggle("more", row.scrollWidth - row.clientWidth - row.scrollLeft > 4);
+    row.addEventListener("scroll", upd, { passive:true });
+    more.addEventListener("click", ()=> row.scrollBy({ left: row.clientWidth * 0.6, behavior:"smooth" }));
+    wrap.appendChild(row); wrap.appendChild(more);
+    requestAnimationFrame(upd);
+    return wrap;
+  }
+  function feedEmpty(){
+    const e = document.createElement("div"); e.className = "mf-empty"; e.textContent = mt("none"); return e;
+  }
+  function dayMeta(it, m){
+    const mon = MONTHS[m - 1].slice(0, 3);
+    if(it.timed) return it.ev.startTime + (it.ev.endTime ? "\u2013" + it.ev.endTime : "");
+    if(it.sd !== it.ed) return it.sd + "\u2013" + it.ed + " " + mon;
+    return "";
+  }
+  function yearMeta(ev){
+    if(ev.startMonth === 1 && ev.endMonth === 12) return "";   // whole-year plans: no "Jan \u2013 Dec" label
+    return ev.startMonth !== ev.endMonth ? MONTHS[ev.startMonth - 1].slice(0, 3) + " \u2013 " + MONTHS[ev.endMonth - 1].slice(0, 3) : "";
+  }
+  function renderFeed(){
+    if(!mobFeed) return;
+    mobFeed.innerHTML = "";
+    if(!mqMobile.matches) return;
+    const mode = getViewMode(), y = store.currentYear;
+    mobFeed.classList.toggle("is-month", mode === "month" || mode === "year");
+    if(mode === "year"){
+      // same grouping as Month view, per selected month: All year / Still going / This month / Next month, then a link to the daily plans
+      const m = mobMonth, cards = yearCardsFor(y, m);
+      const isWhole = ev=> ev.startMonth === 1 && ev.endMonth === 12;
+      const whole = cards.filter(isWhole), rest = cards.filter(ev=> !isWhole(ev));
+      const still = rest.filter(ev=> ev.startMonth < m), here = rest.filter(ev=> ev.startMonth === m);
+      const nm = m === 12 ? 1 : m + 1, ny = m === 12 ? y + 1 : y;
+      const next = yearCardsFor(ny, nm).filter(ev=> ev.startMonth === nm && !isWhole(ev));
+      const isCur = (y === REAL_YEAR && m === REAL_MONTH);
+      const mf = dtf({ month:"short" }), ml = dtf({ month:"long", year:"numeric" });
+      if(whole.length){
+        mobFeed.appendChild(feedHour(mt("allYear"), -1));
+        mobFeed.appendChild(buildAllRow(whole.map(ev=> buildMobCard(ev, yearMeta(ev), true, "row"))));
+      }
+      const byStart = {};
+      still.forEach(ev=>{ (byStart[ev.startMonth] = byStart[ev.startMonth] || []).push(ev); });
+      Object.keys(byStart).map(Number).sort((a2, b2)=> a2 - b2).forEach(k=>{
+        mobFeed.appendChild(tagH(feedHour(mf.format(new Date(y, k - 1, 1)), -1, mt("tagStill"), "still", byStart[k].length), k));
+        if(!collapsedG.still) byStart[k].forEach(ev=> mobFeed.appendChild(buildMobCard(ev, yearMeta(ev), true, "grp")));
+      });
+      if(here.length){
+        const hd = tagH(feedHour(ml.format(new Date(y, m - 1, 1)), -1, mt(isCur ? "tagThisMonth" : "tagThatMonth"), "on", here.length), m); hd.classList.add("cur"); mobFeed.appendChild(hd);
+        if(!collapsedG.on) here.forEach(ev=> mobFeed.appendChild(buildMobCard(ev, yearMeta(ev), true, "grp")));
+      }
+      if(next.length){
+        mobFeed.appendChild(tagH(feedHour(ml.format(new Date(ny, nm - 1, 1)), -1, mt("tagNextMonth"), "up", next.length), ny === y ? nm : ""));
+        if(!collapsedG.up) next.forEach(ev=> mobFeed.appendChild(buildMobCard(ev, yearMeta(ev), true, "grp")));
+      }
+      const nd = dayPlanCount(y, m);
+      if(!mobFeed.children.length && !nd) mobFeed.appendChild(feedEmpty());
+      if(nd){
+        const b = document.createElement("button");
+        b.type = "button"; b.className = "mf-timed"; b.innerHTML = "<span class='mf-line'></span><i>" + mt("daily", nd) + "</i>";
+        b.addEventListener("click", ()=> openDay(m));
+        mobFeed.appendChild(b);
+      }
+      return;
+    }
+    if(mode === "day"){
+      const its = evsForDay(y, dayMonth, viewDay);
+      const H = mobHour, hs = H * 60, he = hs + 60;
+      const T = v=> String(Math.floor(v / 60)).padStart(2, "0") + ":" + String(v % 60).padStart(2, "0");
+      const timed = its.filter(it=> it.timed);
+      const around = timed.filter(it=>{
+        const st = timeToMin(it.ev.startTime), en = it.ev.endTime ? timeToMin(it.ev.endTime) : st;
+        return st < he && (en > hs || st >= hs);
+      });
+      const upcoming = timed.filter(it=>{
+        if(around.indexOf(it) >= 0) return false;
+        const st = timeToMin(it.ev.startTime);
+        return st >= he && st < he + 60;
+      });
+      const none = ()=>{ const e = document.createElement("div"); e.className = "mf-none"; e.textContent = mt("nothing"); return e; };
+      const hh = v=> String(v).padStart(2, "0") + ":00";
+      // all-day plans: always first, square cards in one row that scrolls sideways as more are added
+      const allDay = its.filter(it=> !it.timed);
+      if(allDay.length){
+        mobFeed.appendChild(feedHour(mt("allDay"), -1));
+        mobFeed.appendChild(buildAllRow(allDay.map(it=> buildMobCard(it.ev, dayMeta(it, dayMonth), false, "row"))));
+      }
+      const before = around.filter(it=> timeToMin(it.ev.startTime) < hs), current = around.filter(it=> timeToMin(it.ev.startTime) >= hs);
+      // schedules that began in an earlier hour (and are still running) get that hour's label first
+      const byHour = {};
+      before.forEach(it=>{ const k = Math.floor(timeToMin(it.ev.startTime) / 60); (byHour[k] = byHour[k] || []).push(it); });
+      Object.keys(byHour).map(Number).sort((x, y2)=> x - y2).forEach(k=>{
+        mobFeed.appendChild(feedHour(hh(k), k, mt("tagStill"), "still", byHour[k].length));
+        if(!collapsedG.still) byHour[k].forEach(it=> mobFeed.appendChild(buildMobCard(it.ev, dayMeta(it, dayMonth), false, true)));
+      });
+      if(current.length){
+        const cur = feedHour(hh(H), H, mt("tagOn"), "on", current.length); cur.classList.add("cur"); mobFeed.appendChild(cur);
+        if(!collapsedG.on) current.forEach(it=> mobFeed.appendChild(buildMobCard(it.ev, dayMeta(it, dayMonth), false, true)));
+      }
+      if(H < 23 && upcoming.length){
+        mobFeed.appendChild(feedHour(hh(H + 1), H + 1, mt("tagUp"), "up", upcoming.length));
+        if(!collapsedG.up) upcoming.forEach(it=> mobFeed.appendChild(buildMobCard(it.ev, dayMeta(it, dayMonth), false, true)));
+      }
+      if(!mobFeed.children.length){ const e = document.createElement("div"); e.className = "mf-empty"; e.textContent = mt("nothing"); mobFeed.appendChild(e); }
+      return;
+    }
+    // Month view: same grouping as Day view, per selected day. Timed plans are not listed here, only a link to the Day view.
+    const m = dayMonth, d = mobDay;
+    const all = evsForDay(y, m, d), mc = yearCardsFor(y, m).filter(ev=> !(ev.startMonth === 1 && ev.endMonth === 12));   // whole-year plans live in Year view's "All year", not here
+    const untimed = all.filter(it=> !it.timed), timedN = all.length - untimed.length;
+    const startsOn = (it, mm, dd)=> it.ev.startMonth === mm && it.sd === dd;
+    const today = untimed.filter(it=> startsOn(it, m, d)), still = untimed.filter(it=> !startsOn(it, m, d));
+    const nd = new Date(y, m - 1, d + 1), nm = nd.getMonth() + 1, ndd = nd.getDate();
+    const tomorrow = evsForDay(nd.getFullYear(), nm, ndd).filter(it=> !it.timed && startsOn(it, nm, ndd));
+    const isToday = new Date().toDateString() === new Date(y, m - 1, d).toDateString();
+    const lf = dtf({ month:"short", day:"numeric" }), wf = dtf({ weekday:"short", month:"short", day:"numeric" });
+    if(mc.length){
+      mobFeed.appendChild(feedHour(mt("allMonth"), -1));
+      mobFeed.appendChild(buildAllRow(mc.map(ev=> buildMobCard(ev, yearMeta(ev), true, "row"))));
+    }
+    const byStart = {};
+    still.forEach(it=>{ const k = it.ev.startMonth * 100 + (it.ev.startDay || 1); (byStart[k] = byStart[k] || []).push(it); });
+    Object.keys(byStart).map(Number).sort((a2, b2)=> a2 - b2).forEach(k=>{
+      mobFeed.appendChild(tagH(feedHour(lf.format(new Date(y, Math.floor(k / 100) - 1, k % 100)), -1, mt("tagStill"), "still", byStart[k].length), Math.floor(k / 100), k % 100));
+      if(!collapsedG.still) byStart[k].forEach(it=> mobFeed.appendChild(buildMobCard(it.ev, dayMeta(it, m), false, "grp")));
+    });
+    if(today.length){
+      const hd = tagH(feedHour(wf.format(new Date(y, m - 1, d)), -1, mt(isToday ? "tagToday" : "tagThisDay"), "on", today.length), m, d); hd.classList.add("cur"); mobFeed.appendChild(hd);
+      if(!collapsedG.on) today.forEach(it=> mobFeed.appendChild(buildMobCard(it.ev, dayMeta(it, m), false, "grp")));
+    }
+    if(tomorrow.length){
+      mobFeed.appendChild(tagH(feedHour(wf.format(nd), -1, mt(isToday ? "tagTomorrow" : "tagNextDay"), "up", tomorrow.length), nd.getFullYear() === y ? nm : "", ndd));
+      if(!collapsedG.up) tomorrow.forEach(it=> mobFeed.appendChild(buildMobCard(it.ev, dayMeta(it, nm), false, "grp")));
+    }
+    if(!mobFeed.children.length && !timedN) mobFeed.appendChild(feedEmpty());
+    if(timedN){
+      const b = document.createElement("button");
+      b.type = "button"; b.className = "mf-timed"; b.innerHTML = "<span class='mf-line'></span><i>" + mt("timedLink", timedN) + "</i>";
+      b.addEventListener("click", ()=>{ viewDay = d; window.scrollTo({ top:0 }); render(); });
+      mobFeed.appendChild(b);
+    }
+  }
+
+  if(calStrip) calStrip.addEventListener("click", e=>{
+    const b = e.target.closest(".cs-item"); if(!b) return;
+    const mode = getViewMode(), off = +b.dataset.off || 0;
+    if(off){   // faded neighbour: jump into that year / month / day
+      const k = +b.dataset.k;
+      if(mode === "year"){ mobMonth = k; syncPref(); store.currentYear += off; saveStore(); render(); }
+      else if(mode === "month"){ mobDay = k; shiftMonth(off); }
+      else { shiftDay(off); mobHour = k; renderCalStrip(); renderFeed(); }
+      return;
+    }
+    if(mode === "day"){
+      mobHour = +b.dataset.k;
+      renderCalStrip(true); renderFeed();
+      return;
+    }
+    if(mode === "year") mobMonth = +b.dataset.k; else mobDay = +b.dataset.k;
+    syncPref(); renderCalStrip(true); renderFeed();
+  });
+
+  // arrows beside the strip: step the selected chip by one; past the end they roll into the next year / month / day
+  function stepNav(dir){
+    const mode = getViewMode(), y = store.currentYear;
+    if(mode === "year"){
+      let m = mobMonth + dir;
+      if(m < 1){ m = 12; store.currentYear--; } else if(m > 12){ m = 1; store.currentYear++; }
+      mobMonth = m; syncPref();
+      if(store.currentYear !== y){ saveStore(); render(); } else { renderCalStrip(true); renderFeed(); }
+      return;
+    }
+    if(mode === "month"){
+      const d = mobDay + dir, n = daysInMonth(y, dayMonth);
+      if(d < 1 || d > n){ mobDay = d < 1 ? 99 : 1; shiftMonth(dir); return; }   // render() clamps 99 to the last day
+      mobDay = d; syncPref(); renderCalStrip(true); renderFeed();
+      return;
+    }
+    // Day mode: arrows move by ONE HOUR; past 00:00 / 23:00 they roll into the previous / next day
+    const h = mobHour + dir;
+    if(h < 0 || h > 23){ shiftDay(dir); mobHour = h < 0 ? 23 : 0; renderCalStrip(); renderFeed(); return; }
+    mobHour = h; renderCalStrip(true); renderFeed();
+  }
+  const csPrev = document.getElementById("csPrev"), csNext = document.getElementById("csNext");
+  if(csPrev) csPrev.addEventListener("click", ()=> stepNav(-1));
+  if(csNext) csNext.addEventListener("click", ()=> stepNav(1));
+
+  // ---- title picker: Year view = pick a year, Month view = pick a month, Day view = pick a date; "Today" lives at the bottom ----
+  let popMode = "month", popMonth = 1, popBase = 2026;
+  function buildPop(){
+    let h = "";
+    if(popMode === "year"){
+      h += '<div class="mp-head"><button type="button" class="mp-yb" data-step="-12">&#8249;</button><b>' + popBase + ' \u2013 ' + (popBase + 11) + '</b><button type="button" class="mp-yb" data-step="12">&#8250;</button></div><div class="mp-grid">';
+      for(let yy = popBase; yy < popBase + 12; yy++)
+        h += '<button type="button" class="mp-m' + (yy === store.currentYear ? " on" : "") + (yy === REAL_YEAR ? " now" : "") + '" data-y="' + yy + '">' + yy + '</button>';
+      h += '</div>';
+    } else if(popMode === "month"){
+      const f = dtf({ month:"short" });
+      h += '<div class="mp-head"><button type="button" class="mp-yb" data-step="-1">&#8249;</button><b>' + popYear + '</b><button type="button" class="mp-yb" data-step="1">&#8250;</button></div><div class="mp-grid">';
+      for(let m = 1; m <= 12; m++)
+        h += '<button type="button" class="mp-m' + (popYear === store.currentYear && m === dayMonth ? " on" : "") + (popYear === REAL_YEAR && m === REAL_MONTH ? " now" : "") + '" data-m="' + m + '">' + f.format(new Date(popYear, m - 1, 1)) + '</button>';
+      h += '</div>';
+    } else {
+      const title = dtf({ month:"long", year:"numeric" }).format(new Date(popYear, popMonth - 1, 1));
+      const wf = dtf({ weekday:"narrow" }), lead = (new Date(popYear, popMonth - 1, 1).getDay() + 6) % 7, n = daysInMonth(popYear, popMonth);
+      h += '<div class="mp-head"><button type="button" class="mp-yb" data-step="-1">&#8249;</button><b>' + title + '</b><button type="button" class="mp-yb" data-step="1">&#8250;</button></div><div class="mp-grid mp-days">';
+      for(let i = 0; i < 7; i++) h += '<span class="mp-wd">' + wf.format(new Date(2024, 0, 1 + i)) + '</span>';   // 2024-01-01 is a Monday
+      for(let i = 0; i < lead; i++) h += '<span></span>';
+      for(let d = 1; d <= n; d++)
+        h += '<button type="button" class="mp-d' + (popYear === store.currentYear && popMonth === dayMonth && d === viewDay ? " on" : "") +
+             (popYear === REAL_YEAR && popMonth === REAL_MONTH && d === REAL_DAY ? " now" : "") + '" data-d="' + d + '">' + d + '</button>';
+      h += '</div>';
+    }
+    monthPop.innerHTML = h + '<button type="button" class="mp-today">' + (calLang() === "id" ? "Hari ini" : "Today") + '</button>';
+  }
+  yearTitle.addEventListener("click", ()=>{
+    if(!mqMobile.matches) return;
+    if(!monthPop.hidden){ monthPop.hidden = true; return; }
+    popMode = getViewMode();
+    popYear = store.currentYear; popMonth = dayMonth || 1;
+    popBase = store.currentYear - (store.currentYear % 12);
+    buildPop(); monthPop.hidden = false;
+  });
+  monthPop.addEventListener("click", e=>{
+    const st = e.target.closest(".mp-yb");
+    if(st){
+      const k = +st.dataset.step;
+      if(popMode === "year") popBase += k;
+      else if(popMode === "month") popYear += k;
+      else { const dt = new Date(popYear, popMonth - 1 + k, 1); popYear = dt.getFullYear(); popMonth = dt.getMonth() + 1; }
+      buildPop(); return;
+    }
+    if(e.target.closest(".mp-today")){
+      monthPop.hidden = true;
+      document.getElementById("todayBtn").click();   // same jump as the old Today button
+      return;
+    }
+    const yb = e.target.closest("[data-y]"), mb = e.target.closest("[data-m]"), db = e.target.closest("[data-d]");
+    if(yb){ store.currentYear = +yb.dataset.y; }
+    else if(mb){ store.currentYear = popYear; dayMonth = +mb.dataset.m; }
+    else if(db){ store.currentYear = popYear; dayMonth = popMonth; viewDay = +db.dataset.d; }
+    else return;
+    monthPop.hidden = true; saveStore(); window.scrollTo({ top:0 }); render();
+  });
+  document.addEventListener("click", e=>{
+    if(!e.target.isConnected) return;   // the picker re-renders itself on arrow taps; the tapped node is already gone
+    if(!monthPop.hidden && !monthPop.contains(e.target) && !yearTitle.contains(e.target)) monthPop.hidden = true;
+  });
+
+  // line markers: all lines of a plan are painted by one gradient, edges on whole device pixels
+  function setItemMarkers(item, cols){
+    const d = window.devicePixelRatio || 1, w = Math.max(1, Math.round(3 * d)), g = Math.max(1, Math.round(2 * d));
+    const stops = []; let x = 0;
+    cols.forEach((c, i)=>{
+      if(i){ stops.push("transparent " + (x / d) + "px " + ((x + g) / d) + "px"); x += g; }
+      stops.push(c + " " + (x / d) + "px " + ((x + w) / d) + "px"); x += w;
+    });
+    // text always starts after the widest possible marker (3 lines), so every plan name lines up
+    const maxX = 3 * w + 2 * g;
+    if(x < maxX) stops.push("transparent " + (x / d) + "px " + (maxX / d) + "px");
+    item.style.setProperty("--mk-bg", "linear-gradient(90deg," + stops.join(",") + ")");
+    item.style.setProperty("--mk-total", (maxX / d + 0.02) + "px");
+  }
+  // line markers: size them in whole device pixels so thickness + spacing stay uniform
+  function setMarkerPx(){
+    const d = window.devicePixelRatio || 1, w = Math.max(1, Math.round(3 * d)), g = Math.max(1, Math.round(2 * d));
+    document.documentElement.style.setProperty("--mk-w", (w / d) + "px");
+    document.documentElement.style.setProperty("--mk-gap", (g / d) + "px");
+    // first line starts exactly on a device pixel (sidebar 12px + item border 1px + padding)
+    document.documentElement.style.setProperty("--mk-pad", (Math.round(21 * d) / d - 13) + "px");
+    // header buttons (profile / Archive / Summary): whole-device-pixel size, gap and edge offset
+    document.documentElement.style.setProperty("--hb", (Math.round(28 * d) / d) + "px");
+    document.documentElement.style.setProperty("--hg", (Math.round(6 * d) / d) + "px");
+    document.documentElement.style.setProperty("--hr", (Math.round(10 * d) / d) + "px");
+    document.documentElement.style.setProperty("--hi", (Math.round(21.6 * d) / d) + "px");
+    document.documentElement.style.setProperty("--hx", (Math.round(2 * d) / d) + "px");
+  }
+  setMarkerPx();
+  window.addEventListener("resize", setMarkerPx);
+
+  // ---------- mobile: Archive + Summary buttons move next to the profile (logo row) ----------
+  (function(){
+    const sidebar = document.querySelector(".sidebar"), prof = document.getElementById("settingsBtn");
+    const box = document.createElement("div"); box.className = "brand-actions";
+    sidebar.insertBefore(box, prof);
+    const arch = document.getElementById("archiveTopBtn"), recap = document.getElementById("recapBtn");
+    const topActs = document.querySelector(".top-actions"), add = document.getElementById("addBtn");
+    function place(){
+      if(mqMobile.matches){ box.appendChild(arch); box.appendChild(recap); }
+      else { topActs.insertBefore(arch, add); topActs.appendChild(recap); }
+    }
+    place();
+    if(mqMobile.addEventListener) mqMobile.addEventListener("change", place);
+  })();
+
+  // ---------- mobile: "+" next to the plans title slides the add-plan field open to its left ----------
+  (function(){
+    const plus = document.getElementById("planPlusBtn"), box = document.querySelector(".add-plan");
+    const row = document.querySelector(".plan-title-row"), sidebar = document.querySelector(".sidebar");
+    const inp = document.getElementById("planInput"), addB = document.getElementById("planAddBtn");
+    function place(){ if(mqMobile.matches) row.appendChild(box); else { sidebar.insertBefore(box, row); setOpen(false); } }
+    const fold = document.getElementById("planFoldBtn");
+    function setFolded(f){ sidebar.classList.toggle("plans-folded", f); fold.setAttribute("aria-expanded", f ? "false" : "true"); }
+    fold.addEventListener("click", ()=> setFolded(!sidebar.classList.contains("plans-folded")));
+    function setOpen(o){ row.classList.toggle("open", o); plus.classList.toggle("open", o); if(o){ setFolded(false); inp.focus(); } else inp.blur(); }
+    plus.addEventListener("click", ()=> setOpen(!row.classList.contains("open")));
+    const closeIfDone = ()=> setTimeout(()=>{ if(!inp.value.trim()) setOpen(false); }, 0);
+    addB.addEventListener("click", closeIfDone);
+    inp.addEventListener("keydown", e=>{ if(e.key === "Enter") closeIfDone(); if(e.key === "Escape") setOpen(false); });
+    place();
+    if(mqMobile.addEventListener) mqMobile.addEventListener("change", place);
+  })();
+
+  // ---------- mobile: unsorted list shows max 3 rows, the rest scrolls; a small row says there is more below ----------
+  (function(){
+    const list = document.getElementById("planList");
+    const more = document.createElement("div"); more.className = "plan-more"; more.setAttribute("role", "button");
+    more.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>';
+    list.after(more);
+    let rowH = 24;
+    function update(){
+      if(!mqMobile.matches){ list.style.maxHeight = ""; more.classList.remove("scrollable"); return; }
+      const it = list.querySelector(".plan-item");
+      if(it){ const h = it.getBoundingClientRect().height; if(h > 8) rowH = h; }
+      list.style.maxHeight = (rowH * 3) + "px";
+      const total = list.querySelectorAll(".plan-item").length;
+      const left = list.scrollHeight - list.clientHeight - list.scrollTop;
+      const below = Math.max(0, Math.ceil((left - 2) / rowH));
+      more.classList.toggle("scrollable", total > 3);
+      more.classList.toggle("at-end", below === 0);
+    }
+    list.addEventListener("scroll", update, { passive:true });
+    more.addEventListener("click", ()=>{
+      const atEnd = more.classList.contains("at-end");
+      list.scrollTo({ top: atEnd ? 0 : list.scrollTop + rowH * 3, behavior: "smooth" });
+    });
+    new MutationObserver(update).observe(list, { childList:true });
+    window.addEventListener("resize", update);
+    if(mqMobile.addEventListener) mqMobile.addEventListener("change", update);
+    update(); setTimeout(update, 300);
+  })();
+
+  const _renderBase = render;
+  render = function(){
+    _renderBase.apply(this, arguments);
+    try{
+      const mode = getViewMode(), y = store.currentYear;
+      if(dayMonth != null) mobMonth = dayMonth;
+      else if(mobMonth == null) mobMonth = (y === REAL_YEAR) ? REAL_MONTH : 1;
+      if(mode === "day") mobDay = viewDay;
+      else if(mode === "month"){
+        if(mobDay == null) mobDay = (y === REAL_YEAR && dayMonth === REAL_MONTH) ? REAL_DAY : 1;
+        mobDay = Math.min(mobDay, daysInMonth(y, dayMonth));
+      }
+      syncPref();
+      if(mode === "day"){
+        const sig = y + "-" + dayMonth + "-" + viewDay;
+        if(mobHour == null || sig !== mobHourSig){
+          mobHourSig = sig;
+          const its = evsForDay(y, dayMonth, viewDay).filter(it=> it.timed);
+          mobHour = (new Date().toDateString() === new Date(y, dayMonth - 1, viewDay).toDateString()) ? new Date().getHours()
+                  : (its.length ? parseInt(its[0].ev.startTime, 10) : 8);
+        }
+        if(mqMobile.matches) yearTitle.textContent = dtf({ weekday:"short", month:"short", day:"numeric" }).format(new Date(y, dayMonth - 1, viewDay));
+      }
+      yearTitle.classList.toggle("pickable", mqMobile.matches);
+      yearTitle.classList.toggle("yv", mode === "year");
+      renderCalStrip();
+      renderFeed();
+    }catch(err){ console.error(err); }
+  };
+  if(mqMobile.addEventListener) mqMobile.addEventListener("change", ()=> render());
+
   render();
 })();
 </script>
