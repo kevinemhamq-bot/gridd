@@ -18,7 +18,7 @@ LAYOUT (top -> bottom)
     over the title + chip; opening it also unfolds the list). x closes, Enter/Esc/add closes. Plan colour markers: .swatch/.plan-badge
     are display:none; .plan-item::before draws thin lines from ––mk-bg gradient set by setItemMarkers() (device-pixel aligned,
     also ––mk-pad / ––mk-total).
- 3. Sticky .topbar (top:0, or 40px with body.has-guest-banner): [title v | Today | < > ]. Title is tappable (#monthPop
+ 3. Sticky .topbar (top:0, or 40px / 48px on phone with body.has-guest-banner): [title v | Today | < > ]. Title is tappable (#monthPop
     month/year picker) in Month/Day modes. Day-mode title is short ("Sun, Oct 11").
  4. #calStrip = tab strip, content depends on mode (renderCalStrip):
       Year : 12 month chips   -> feed = yearly cards of that month + link "N daily plans >" (opens Month view)
@@ -85,7 +85,7 @@ PHONE UPDATE LOG (latest state; overrides older text above where they differ)
             > Tomorrow (= "Next day") > link "N timed plans >" at bottom (.mf-timed: line left, italic text right; opens Day view). Timed plans are NOT listed.
      Year : All year (top, square row, plans Jan-Dec, no "Jan - Dec" label) > Still going (by start month) > This month (= "That month") > Next month
             > link "N daily plans >" (.mf-timed, opens Month view).
- - Square row: buildAllRow(cards) -> .mf-allwrap > .mf-allday (horizontal scroll, cards .mcard.sq 83x83, title max 3 lines, done button bottom-right)
+ - Square row: buildAllRow(cards) -> .mf-allwrap > .mf-allday (horizontal scroll, cards .mcard.sq 108x108 (see ERGONOMIC SIZE), title max 3 lines, done button bottom-right)
    + .mf-allmore chevron (shown only while more content is to the right; tap scrolls). Month/Year override: .mob-feed.is-month .mcard(.sq).
  - New MTXT keys (id+en): tagToday tagThisDay tagTomorrow tagNextDay timedLink allYear tagThisMonth tagThatMonth tagNextMonth.
  - Other: Plans row: fold chip (.plan-fold) background transparent. Title triangle (.year-title.pickable::after) is 17px and shown in ALL modes.
@@ -108,6 +108,12 @@ PHONE UPDATE LOG 2 (latest; overrides older text where it differs) - ALL of this
  - KNOWN: the file has NO <meta name="viewport">. On a real phone the layout viewport becomes 980px and phone mode never triggers; add
    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"> if testing on a real device (env(safe-area-*) also needs viewport-fit=cover).
  - TEST: playwright chromium, viewport 390x780; for scrollbar bugs launch with ignore_default_args=['--hide-scrollbars'].
+
+ - TAP TARGETS: block "TAP TARGETS (HP)" near the end of the media block makes every clickable thing >=44px (invisible ::after where the drawn control is smaller; note inset is measured from the PADDING box, so bordered buttons need a bigger negative inset). Guest banner is 48px tall on phone (topbar sticky offset 48px).
+ - ERGONOMIC SIZE (latest, overrides sizes in COMPACT MODE): block "ERGONOMIC SIZE (HP)" is the LAST thing inside the media block. Phone sizes were
+   too small on a real device, so type is now >=13px (cards 15-16.5px, inputs 16px) and touch targets >=40-44px (tick 44, chips 48x~56, fab 68,
+   form fields 46, buttons 46). Header vars in setMarkerPx(): --hb 40 (profile) --hi 40 (icon box, icon svg 29) --hg 6 --hx 6.
+   Square all-day cards are now 108x108. A final SPACING block (end of the media block) loosens gaps/paddings; edit it for tighter/looser rhythm. To rescale, edit only that block + setMarkerPx().
 
 -->
 <html lang="en">
@@ -1242,6 +1248,236 @@ try{
     .recap-trow .rsaldo::before{ content:attr(data-lbl) " "; font-weight:500; }
     .recap-trow .rnote{ grid-area:no; font-size:12px; padding:2px 4px; margin-left:-4px; width:calc(100% + 4px); }
     .recap-trow .rnote::placeholder{ color:var(--muted); opacity:.5; }
+
+    /* ===== ERGONOMIC SIZE (HP): bigger type + touch targets (>=40px). Comes LAST in the media block, so it overrides COMPACT MODE.
+       To scale everything again, edit the numbers here (not the COMPACT block). ===== */
+    :root{ --fab:68px; --dock-gap:10px; --dock-side:14px; }
+    .main{ padding:0 12px calc(var(--fab) + 44px + env(safe-area-inset-bottom, 0px)); }
+
+    /* header row: logo | Archive | Summary | profile  (sizes --hb --hi --hg --hx are set in setMarkerPx) */
+    .sidebar{ padding:6px 14px; }
+    .sidebar > .brand{ margin:0 -14px 6px; padding:0 16px 8px; min-height:58px; align-items:center; font-size:21px; }
+    .brand .dot{ width:34px; height:34px; border-radius:10px; }
+    .profile{ top:10px; }
+    .brand-actions{ top:10px; }
+    .pf-avatar{ font-size:18px; }
+    .pf-avatar, .pf-avatar img, .profile{ border-radius:12px; }
+    .archive-top, .recap-tab{ border-radius:12px !important; }
+    .archive-top svg, .recap-tab svg{ width:29px; height:29px; }
+    .archive-top-count{ top:-2px; right:-4px; min-width:20px; height:20px; line-height:20px; font-size:12px; }
+    .pf-dot{ width:12px; height:12px; }
+
+    /* unsorted plans */
+    .plan-title-row{ min-height:44px; }
+    .plan-list-title{ font-size:14px; margin:2px 6px; }
+    .plan-list-title .scope-chip{ height:34px; font-size:14px; padding:0 14px; }
+    .plan-plus{ width:40px; height:40px; font-size:30px; margin:0 8px 0 0; }
+    .plan-fold{ height:38px; padding:0 14px; }
+    .plan-fold svg{ width:19px; height:19px; }
+    .plan-title-row > .add-plan{ padding:0 0 0 48px; }
+    .plan-title-row > .add-plan input{ font-size:16px; }
+    .plan-title-row > .add-plan button{ font-size:26px; }
+    #planList{ max-height:138px; }
+    .plan-item{ padding:10px 10px 10px var(--mk-pad, 8px); gap:10px; font-size:16.5px; border-radius:14px; min-height:46px; }
+    .plan-item::before{ height:20px; }
+    .plan-item .plan-check{ width:28px; height:28px; }
+    .plan-item .plan-check svg{ width:15px; height:15px; }
+    .plan-more{ height:28px; }
+    .plan-more svg{ width:19px; height:19px; }
+
+    /* top bar: title + chip strip */
+    .topbar{ gap:6px; margin:0 -12px 6px; padding:10px 12px 6px; }
+    .year-title{ font-size:20px; }
+    .year-title.pickable::after, .year-title.pickable::before{ font-size:21px; }
+    .year-title.yv.pickable::after{ font-size:17px; }
+    .cal-nav{ margin:4px -6px 0; max-width:calc(100% + 12px); }
+    .cs-nav{ width:42px; height:68px; font-size:34px; }
+    .cs-item{ min-width:52px; gap:5px; padding:11px 4px 9px; border-radius:15px; }
+    .cs-item .cs-top{ font-size:12.5px; }
+    .cs-item .cs-num{ font-size:19px; }
+    .cs-item::after{ width:5px; height:5px; }
+    .cs-item.mon{ min-width:64px; }
+    .cs-item.mon .cs-num{ font-size:16px; }
+    .month-pop{ left:12px; right:12px; padding:12px; border-radius:18px; }
+    .mp-head{ margin-bottom:8px; font-size:17px; }
+    .mp-yb{ width:48px; height:48px; font-size:28px; }
+    .mp-grid{ gap:8px; }
+    .mp-m{ padding:14px 0; font-size:16px; border-radius:12px; }
+    .mp-wd{ font-size:12.5px; padding:2px 0 6px; }
+    .mp-days{ gap:3px; }
+    .mp-d{ font-size:16px; min-height:40px; }
+    .mp-today{ padding:13px 0; margin-top:10px; font-size:16px; border-radius:12px; }
+
+    /* card feed */
+    .mob-feed{ gap:9px; padding:8px 0 4px; }
+    .mf-hour{ margin:8px 2px -2px; font-size:14.5px; gap:10px; }
+    .mf-tag{ padding:3px 10px; font-size:12px; }
+    .mf-chev{ font-size:28px; }
+    .mf-chev i{ font-size:12px; padding:1px 7px; }
+    .mf-empty{ padding:36px 12px; font-size:16px; }
+    .mf-none{ font-size:14.5px; }
+    .mf-link{ padding:11px 16px; font-size:15px; }
+    .mf-timed{ padding:10px 2px; font-size:15px; margin:8px 0 0; }
+    .mcard{ min-height:56px; gap:3px; padding:13px 56px 13px 14px; border-radius:15px; font-size:16.5px; }
+    .mcard.has-amount{ padding-bottom:12px; }
+    .mcard .time-preview{ font-size:13.5px; }
+    .mcard .note-preview{ font-size:14.5px; }
+    .mcard .amount-preview{ font-size:13.5px; }
+    .mcard > .done-btn{ top:4px; right:4px; width:48px; height:48px; }
+    .mcard .done-dot{ width:30px; height:30px; }
+    .mcard .done-dot svg{ width:16px; height:16px; }
+    .mcard.sq{ width:108px; height:108px; padding:10px 10px 30px; border-radius:15px; }
+    .mcard.sq .ev-title{ font-size:14.5px; }
+    .mcard.sq .time-preview{ font-size:11.5px; }
+    .mcard.sq .amount-preview{ left:10px; bottom:8px; font-size:12px; }
+    .mcard.sq > .done-btn{ width:44px; height:44px; }
+    .mcard.sq .done-dot{ width:26px; height:26px; }
+    .mcard.sq .done-dot svg{ width:14px; height:14px; }
+    .mf-allmore{ width:42px; font-size:36px; }
+    /* Month / Year view keep slightly smaller text than Day, but still readable */
+    .mob-feed.is-month .mcard{ font-size:15px; min-height:48px; padding:10px 54px 10px 13px; border-radius:13px; }
+    .mob-feed.is-month .mcard .time-preview, .mob-feed.is-month .mcard .amount-preview{ font-size:12px; }
+    .mob-feed.is-month .mcard .note-preview{ font-size:13px; }
+    .mob-feed.is-month .mcard.sq{ padding:10px 10px 30px; border-radius:15px; }
+    .mob-feed.is-month .mcard.sq .ev-title{ font-size:13.5px; }
+    .mob-feed.is-month .mcard.sq .time-preview{ font-size:11px; }
+
+    /* bottom dock */
+    .seg.view-seg{ padding:5px; gap:3px; }
+    .seg.view-seg button{ font-size:18px; }
+    .view-thumb{ top:5px; bottom:5px; }
+    #addBtn::before{ width:28px; height:28px; }
+    .day-hfloat{ bottom:calc(var(--fab) + 40px + env(safe-area-inset-bottom, 0px)); }
+
+    /* add / edit forms */
+    .modal-wide h3{ font-size:18px; line-height:34px; }
+    .modal-wide .modal-x{ width:46px; height:46px; font-size:19px; }
+    .modal-wide .modal-cols{ padding:16px 16px 10px; gap:6px; }
+    .modal-wide .field{ margin-bottom:14px; }
+    .modal-wide .field label{ font-size:14px; margin-bottom:6px; }
+    .field input[type=text], .field input[type=time], .field select, .field textarea{ font-size:16px; padding:9px 12px; border-radius:11px; }
+    .field input[type=text], .field input[type=time], .field select{ height:46px; }
+    .modal-wide .modal-note textarea{ height:150px; min-height:150px; }
+    .check-row{ gap:12px; font-size:16px; min-height:44px; margin-bottom:6px; }
+    .check-row input{ width:26px; height:26px; }
+    .swatch-btn{ width:36px; height:36px; }
+    .modal-wide .swatches{ gap:4px; justify-content:space-between; }
+    .modal-wide .seg button, .settings-modal .seg button{ font-size:15px; min-height:44px; padding:8px 12px; }
+    .modal-wide .btn, .settings-modal .btn{ font-size:16px; padding:12px 20px; min-height:46px; border-radius:23px; }
+    .modal-wide .modal-actions{ padding:12px 16px calc(12px + env(safe-area-inset-bottom, 0px)); }
+
+    /* settings + archive popups */
+    .settings-modal{ width:min(440px, 94vw); }
+    .s-section h4{ font-size:16px; }
+    .s-note, .s-hint{ font-size:14px; }
+    .arch-name{ font-size:16px; }
+    .arch-meta{ font-size:13.5px; }
+    .arch-row{ padding:12px 4px; }
+    .arch-group{ font-size:13.5px; }
+    .guest-banner{ font-size:13px; }
+
+    /* summary (keuangan) sheet */
+    .recap-head h3{ font-size:18px; }
+    .recap-close{ width:46px; height:46px; font-size:19px; }
+    .recap-stat{ padding:9px 12px; border-radius:12px; }
+    .recap-stat .label{ font-size:12px; }
+    .recap-stat .value{ font-size:16px; }
+    .recap-stat.net .value{ font-size:20px; }
+    .recap-trow{ grid-template-columns:38px minmax(0,1fr) auto; padding:10px 0; gap:3px 10px; }
+    .recap-trow .rmonth{ font-size:13px; }
+    .recap-trow .rtitle, .recap-trow .rin, .recap-trow .rout{ font-size:16px; }
+    .recap-trow .rsaldo{ font-size:13px; }
+    .recap-trow .rnote{ font-size:14.5px; padding:5px 6px; }
+
+    /* audit fixes: rows/links that were still under ~40px, banner buttons, settings + archive as full sheets */
+    .mf-hour.fold{ min-height:40px; }
+    .mf-timed{ min-height:44px; }
+    .plan-more{ height:32px; position:relative; }
+    .plan-more::after{ content:""; position:absolute; left:0; right:0; top:-6px; bottom:-6px; }
+    .recap-trow .rnote{ min-height:40px; }
+    .guest-banner .gb-btn{ height:32px; padding:0 14px; font-size:14px; }
+    .guest-banner .gb-x{ width:34px; height:34px; font-size:16px; }
+    .modal.settings-modal, .modal.arch-modal{
+      width:100%; max-width:none; height:100vh; height:100dvh; max-height:none; border-radius:0; box-shadow:none; box-sizing:border-box;
+      padding:calc(14px + env(safe-area-inset-top, 0px)) 16px 0; overflow-y:auto; overscroll-behavior:contain;
+    }
+    .settings-modal h3, .arch-modal h3{ font-size:20px; margin-bottom:6px; }
+    .settings-modal .s-section{ padding:18px 0; }
+    .settings-modal .row2{ flex-direction:column; gap:0; }
+    .settings-modal .swatch-btn{ width:40px; height:40px; }
+    .settings-modal .swatches{ gap:10px; }
+    .settings-modal .link-muted, .settings-modal .link-danger, .arch-modal .link-danger{ min-height:44px; font-size:15px; }
+    .settings-modal .modal-actions, .arch-modal .modal-actions{
+      position:sticky; bottom:0; z-index:3; margin:12px -16px 0; padding:12px 16px calc(12px + env(safe-area-inset-bottom, 0px));
+      background:var(--surface); border-top:1px solid var(--border);
+    }
+    .arch-list{ max-height:none; }
+    .arch-row{ min-height:56px; }
+
+    /* ===== SPACING (HP): looser gaps between cards, rows, sections and fields (last block = wins) ===== */
+    :root{ --dock-bottom:calc(14px + env(safe-area-inset-bottom, 0px)); }
+    .main{ padding-top:4px; padding-bottom:calc(var(--fab) + 60px + env(safe-area-inset-bottom, 0px)); }
+    .sidebar{ padding:8px 14px 6px; }
+    .plan-title-row{ margin-bottom:4px; }
+    .plan-item{ padding-top:12px; padding-bottom:12px; min-height:50px; }
+    #planList{ max-height:150px; }
+    .topbar{ padding:12px 12px 8px; gap:8px; }
+    .cal-nav{ margin:6px -6px 6px; }
+    .cs-item{ margin:0 2px; }
+    .mob-feed{ gap:12px; padding:12px 0 6px; }
+    .mf-hour{ margin:12px 2px 0; }
+    .mf-timed{ margin:12px 0 0; }
+    .mcard{ padding-top:14px; padding-bottom:14px; }
+    .mcard.has-amount{ padding-bottom:14px; }
+    .mob-feed.is-month .mcard{ padding-top:12px; padding-bottom:12px; }
+    .mf-allday{ gap:12px; padding:4px 10px 8px; }
+    .modal-wide .field{ margin-bottom:20px; }
+    .modal-wide .modal-cols{ padding:18px 16px 12px; gap:8px; }
+    .check-row{ margin-bottom:12px; }
+    .modal-wide .modal-actions .right{ gap:12px; }
+    .settings-modal .s-section{ padding:22px 0; }
+    .arch-row{ padding:14px 4px; }
+    .recap-trow{ padding:13px 0; gap:5px 10px; }
+    .recap-summary{ gap:8px; margin-bottom:10px; }
+    .mp-grid{ gap:10px; }
+    .month-pop{ padding:14px; }
+
+    /* ===== TAP TARGETS (HP): every clickable thing has a hit area >= 44px. Where the drawn control is smaller, an invisible ::after enlarges the touch area ===== */
+    .seg.view-seg button{ align-self:stretch; height:auto; }   /* the Year/Month/Day buttons were only as tall as their text (18px): now the full pill */
+    .archive-top::after, .recap-tab::after{ inset:-2px -2px; }
+    .profile::after{ content:""; position:absolute; inset:-4px; }
+    .guest-banner .gb-btn, .guest-banner .gb-x{ position:relative; }
+    .guest-banner{ height:48px; }
+    body.has-guest-banner{ padding-top:48px; }
+    body.has-guest-banner .topbar{ top:48px; }
+    .guest-banner .gb-btn{ height:36px; }
+    .guest-banner .gb-btn::after{ content:""; position:absolute; inset:-6px -4px; }
+    .guest-banner .gb-x::after{ content:""; position:absolute; inset:-5px -5px; }
+    .settings-modal .swatch-btn::after{ inset:-4px -3px; }
+    .plan-plus::after{ content:""; position:absolute; inset:-2px; }
+    .plan-plus{ position:relative; }
+    .plan-fold{ position:relative; min-width:44px; }
+    .plan-fold::after{ content:""; position:absolute; inset:-3px -2px; }
+    .plan-item .plan-check{ position:relative; }
+    .plan-item .plan-check::after{ content:""; position:absolute; inset:-10px; }
+    .plan-title-row > .add-plan input{ height:100%; min-height:44px; }
+    .plan-title-row > .add-plan button{ min-width:44px; }
+    .cs-nav{ width:44px; }
+    .mf-allmore{ width:44px; }
+    .mf-allmore + *{ }
+    .mcard.sq > .done-btn{ width:46px; height:46px; }
+    .modal-wide .swatches, .settings-modal .swatches{ display:grid; grid-template-columns:repeat(auto-fit, minmax(41px, 1fr)); gap:0; }
+    .modal-wide .swatches{ grid-template-columns:repeat(8, 1fr); }
+    .swatch-btn{ position:relative; justify-self:center; }
+    .swatch-btn::after{ content:""; position:absolute; inset:-6px -4.5px; }   /* inset is measured from the padding box (inside the 2px border) */
+    .check-row{ width:100%; box-sizing:border-box; }
+    .modal-actions .link-danger, .modal-actions .link-muted, .modal-wide .modal-actions button, .arch-modal .btn, .settings-modal .modal-actions button{
+      min-height:46px; padding-left:16px; padding-right:16px; font-size:16px; }
+    .recap-trow .rnote{ min-height:44px; }
+    .recap-trow{ min-height:64px; }
+    .mp-yb{ width:48px; height:48px; }
+    .mp-d{ min-height:44px; }
+    .mp-m{ min-height:48px; }
   }
 
   /* status dot pulse (profile card) */
@@ -6182,11 +6418,11 @@ try{
     // first line starts exactly on a device pixel (sidebar 12px + item border 1px + padding)
     document.documentElement.style.setProperty("--mk-pad", (Math.round(21 * d) / d - 13) + "px");
     // header buttons (profile / Archive / Summary): whole-device-pixel size, gap and edge offset
-    document.documentElement.style.setProperty("--hb", (Math.round(28 * d) / d) + "px");
+    document.documentElement.style.setProperty("--hb", (Math.round(40 * d) / d) + "px");
     document.documentElement.style.setProperty("--hg", (Math.round(6 * d) / d) + "px");
     document.documentElement.style.setProperty("--hr", (Math.round(10 * d) / d) + "px");
-    document.documentElement.style.setProperty("--hi", (Math.round(21.6 * d) / d) + "px");
-    document.documentElement.style.setProperty("--hx", (Math.round(2 * d) / d) + "px");
+    document.documentElement.style.setProperty("--hi", (Math.round(40 * d) / d) + "px");
+    document.documentElement.style.setProperty("--hx", (Math.round(6 * d) / d) + "px");
   }
   setMarkerPx();
   window.addEventListener("resize", setMarkerPx);
